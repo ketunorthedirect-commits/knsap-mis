@@ -4,7 +4,397 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KN SAP — Ketu North Skills & Apprenticeship Programme</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">
+// ══════════════════════════════════════════════
+// MASTER / TRAINEE PAGE TAB SWITCHING
+// ══════════════════════════════════════════════
+
+function switchMasterTab(tabId) {
+  document.querySelectorAll('#page-masters .page-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-masters .page-tab-btn').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById(tabId);
+  if (el) el.classList.add('active');
+  const btn = document.getElementById('tab-btn-' + tabId);
+  if (btn) btn.classList.add('active');
+  if (tabId === 'master-records') renderMasters();
+  updateMasterRecordCount();
+}
+
+function switchTraineeTab(tabId) {
+  document.querySelectorAll('#page-trainees .page-tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-trainees .page-tab-btn').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById(tabId);
+  if (el) el.classList.add('active');
+  const btn = document.getElementById('tab-btn-' + tabId);
+  if (btn) btn.classList.add('active');
+  if (tabId === 'trainee-records') renderTrainees();
+  updateTraineeRecordCount();
+}
+
+function updateMasterRecordCount() {
+  const el = document.getElementById('master-records-count');
+  if (el) el.textContent = new Set(DB.map(r=>r['NAME OF MASTER']).filter(Boolean)).size;
+}
+
+function updateTraineeRecordCount() {
+  const el = document.getElementById('trainee-records-count');
+  if (el) el.textContent = DB.filter(r=>r['NAME OF TRAINEE']).length;
+}
+
+// ══════════════════════════════════════════════
+// PHOTO PREVIEW
+// ══════════════════════════════════════════════
+
+function previewPhoto(input, previewId, iconId) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('Photo must be under 2MB'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const preview = document.getElementById(previewId);
+    const icon = document.getElementById(iconId);
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+    if (icon) icon.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+// ══════════════════════════════════════════════
+// TRACKING CHECKBOXES (visual)
+// ══════════════════════════════════════════════
+
+function toggleTracking(labelEl, checkId) {
+  const cb = document.getElementById(checkId);
+  if (!cb) return;
+  cb.checked = !cb.checked;
+  labelEl.classList.toggle('checked', cb.checked);
+}
+
+// ══════════════════════════════════════════════
+// AGE AUTO-CALCULATION
+// ══════════════════════════════════════════════
+
+function calcMasterAge() {
+  const dob = document.getElementById('m-dob').value;
+  if (!dob) return;
+  const age = Math.floor((Date.now() - new Date(dob)) / (365.25 * 24 * 3600 * 1000));
+  document.getElementById('m-age').value = age > 0 ? age : '';
+}
+
+function calcTraineeAge() {
+  const dob = document.getElementById('t-dob').value;
+  if (!dob) return;
+  const age = Math.floor((Date.now() - new Date(dob)) / (365.25 * 24 * 3600 * 1000));
+  document.getElementById('t-age').value = age > 0 ? age : '';
+}
+
+// ══════════════════════════════════════════════
+// DUPLICATE DETECTION
+// ══════════════════════════════════════════════
+
+function checkMasterDuplicate(val) {
+  const warn = document.getElementById('m-dup-warn');
+  if (!warn) return;
+  const exists = val && DB.some(r => (r['MASTER ID NO']||'').toUpperCase() === val.toUpperCase());
+  warn.classList.toggle('show', exists);
+}
+
+function checkTraineeDuplicate(val) {
+  const warn = document.getElementById('t-dup-warn');
+  if (!warn) return;
+  const exists = val && DB.some(r => (r['TRAINEE ID NO']||'').toUpperCase() === val.toUpperCase());
+  warn.classList.toggle('show', exists);
+}
+
+// ══════════════════════════════════════════════
+// SAVE MASTER RECORD
+// ══════════════════════════════════════════════
+
+function saveMasterRecord() {
+  const name = document.getElementById('m-name').value.trim();
+  const gender = document.getElementById('m-gender').value;
+  const cohort = document.getElementById('m-cohort').value;
+  const zone = document.getElementById('m-zone').value;
+  const branch = document.getElementById('m-branch').value.trim();
+  const skill = document.getElementById('m-skill').value.trim();
+  const phone1 = document.getElementById('m-phone1').value.trim();
+
+  if (!name) { showToast('⚠️ Full Name is required'); document.getElementById('m-name').focus(); return; }
+  if (!gender) { showToast('⚠️ Gender is required'); return; }
+  if (!cohort) { showToast('⚠️ Please select a Cohort'); return; }
+  if (!zone) { showToast('⚠️ Please select a Zone'); return; }
+  if (!branch) { showToast('⚠️ Branch Name is required'); return; }
+  if (!skill) { showToast('⚠️ Vocation/Skill is required'); return; }
+  if (!phone1) { showToast('⚠️ Phone Number 1 is required'); return; }
+
+  const photo = document.getElementById('master-photo-preview').src;
+
+  const newRecord = {
+    '#': DB.length + 1,
+    'COHORT': parseInt(cohort),
+    'ZONE': zone,
+    'BRANCH NAME': branch,
+    'NAME OF MASTER': name,
+    'GENDER': gender,
+    'MASTER GENDER': gender,
+    'D.O. B.': document.getElementById('m-dob').value || '',
+    'AGE': document.getElementById('m-age').value || '',
+    'MASTER ID NO': document.getElementById('m-id').value.trim(),
+    'SKILL': skill,
+    'SKILLS': skill,
+    'NAME OF BUSINESS': document.getElementById('m-business').value.trim(),
+    'REGISTERED?': document.getElementById('m-registered').value,
+    'LOCATION OF BUSINESS': document.getElementById('m-biz-location').value.trim(),
+    'LANDMARK': document.getElementById('m-landmark').value.trim(),
+    'PHONE NUMBER 1': phone1,
+    'PHONE NUMBER 2': document.getElementById('m-phone2').value.trim(),
+    'CONTACT OF MASTER': phone1,
+    'ADDRESS': document.getElementById('m-address').value.trim(),
+    'DIGITAL ADDRESS': document.getElementById('m-digital-addr').value.trim(),
+    'NATIONAL ID': document.getElementById('m-national-id').value.trim(),
+    'YEARS OF EXPERIENCE': document.getElementById('m-experience').value,
+    'GUARANTOR NAME': document.getElementById('m-guarantor-name').value.trim(),
+    'GUARANTOR CONTACT': document.getElementById('m-guarantor-contact').value.trim(),
+    'NOTES': document.getElementById('m-notes').value.trim(),
+    'AGREEMENT': document.getElementById('m-agreement-val').checked ? 'YES' : '',
+    'M_FORM': document.getElementById('m-moa-val').checked ? 'YES' : '',
+    'GRADUATION FEE': document.getElementById('m-grad-val').checked ? 'YES' : '',
+    'PASSPORT PICTURE': photo && photo.startsWith('data:') ? photo : '',
+    'NAME OF TRAINEE': '',
+    'TRAINEE GENDER': '',
+    'CONTACT OF TRAINEE': '',
+    'TRAINEE ID NO': '',
+    'PROSPECTUS': '',
+    'A_FORM': '',
+  };
+
+  DB.push(newRecord);
+  logActivity('Registered master: ' + name + ' (' + zone + ', ' + skill + ')');
+  populateSkillFilters();
+
+  // Show success
+  const banner = document.getElementById('master-save-success');
+  banner.classList.add('show');
+  setTimeout(() => banner.classList.remove('show'), 4000);
+  showToast('✅ Master record saved!');
+
+  clearMasterForm();
+  updateMasterRecordCount();
+
+  // Write back to Google Sheets if connected
+  syncMasterToSheets(newRecord);
+}
+
+// ══════════════════════════════════════════════
+// SAVE TRAINEE RECORD
+// ══════════════════════════════════════════════
+
+function saveTraineeRecord() {
+  const name = document.getElementById('t-name').value.trim();
+  const gender = document.getElementById('t-gender').value;
+  const cohort = document.getElementById('t-cohort').value;
+  const zone = document.getElementById('t-zone').value;
+  const branch = document.getElementById('t-branch').value.trim();
+  const skill = document.getElementById('t-skill').value.trim();
+  const phone1 = document.getElementById('t-phone1').value.trim();
+  const master = document.getElementById('t-master').value.trim();
+  const education = document.getElementById('t-education').value;
+
+  if (!name) { showToast('⚠️ Full Name is required'); document.getElementById('t-name').focus(); return; }
+  if (!gender) { showToast('⚠️ Gender is required'); return; }
+  if (!cohort) { showToast('⚠️ Please select a Cohort'); return; }
+  if (!zone) { showToast('⚠️ Please select a Zone'); return; }
+  if (!branch) { showToast('⚠️ Branch Name is required'); return; }
+  if (!skill) { showToast('⚠️ Vocation/Skill is required'); return; }
+  if (!phone1) { showToast('⚠️ Phone Number 1 is required'); return; }
+  if (!master) { showToast('⚠️ Master Trainer name is required'); return; }
+  if (!education) { showToast('⚠️ Level of Education is required'); return; }
+
+  const photo = document.getElementById('trainee-photo-preview').src;
+
+  const newRecord = {
+    '#': DB.length + 1,
+    'COHORT': parseInt(cohort),
+    'ZONE': zone,
+    'BRANCH NAME': branch,
+    'NAME OF TRAINEE': name,
+    'TRAINEE GENDER': gender,
+    'GENDER': gender,
+    'D.O. B.': document.getElementById('t-dob').value || '',
+    'AGE': document.getElementById('t-age').value || '',
+    'TRAINEE ID NO': document.getElementById('t-id').value.trim(),
+    'SKILL': skill,
+    'SKILLS': skill,
+    'PHONE NUMBER 1': phone1,
+    'PHONE NUMBER 2': document.getElementById('t-phone2').value.trim(),
+    'CONTACT OF TRAINEE': phone1,
+    'ADDRESS': document.getElementById('t-address').value.trim(),
+    'DIGITAL ADDRESS': document.getElementById('t-digital-addr').value.trim(),
+    'NATIONAL ID': document.getElementById('t-national-id').value.trim(),
+    'LEVEL OF EDUCATION': education,
+    'DISABILITY': document.getElementById('t-disability').value,
+    'EMPLOYMENT STATUS': document.getElementById('t-employment').value,
+    'ENROLMENT DATE': document.getElementById('t-enrol-date').value || '',
+    'NAME OF MASTER': master,
+    'GUARANTOR NAME': document.getElementById('t-guarantor-name').value.trim(),
+    'GUARANTOR CONTACT': document.getElementById('t-guarantor-contact').value.trim(),
+    'GUARANTOR RELATIONSHIP': document.getElementById('t-guarantor-rel').value,
+    'GUARANTOR ADDRESS': document.getElementById('t-guarantor-address').value.trim(),
+    'NOTES': document.getElementById('t-notes').value.trim(),
+    'PROSPECTUS': document.getElementById('t-prospectus-val').checked ? 'YES' : '',
+    'A_FORM': document.getElementById('t-moa-val').checked ? 'YES' : '',
+    'EQUIPMENT RECEIVED': document.getElementById('t-equipment-val').checked ? 'YES' : '',
+    'PASSPORT PICTURE': photo && photo.startsWith('data:') ? photo : '',
+    'CONTACT OF MASTER': '',
+    'MASTER ID NO': '',
+    'AGREEMENT': '',
+    'M_FORM': '',
+    ' MASTER GENDER': '',
+  };
+
+  DB.push(newRecord);
+  logActivity('Enrolled trainee: ' + name + ' under ' + master + ' (' + skill + ')');
+  populateSkillFilters();
+
+  const banner = document.getElementById('trainee-save-success');
+  banner.classList.add('show');
+  setTimeout(() => banner.classList.remove('show'), 4000);
+  showToast('✅ Trainee record saved!');
+
+  clearTraineeForm();
+  updateTraineeRecordCount();
+
+  syncTraineeToSheets(newRecord);
+}
+
+// ══════════════════════════════════════════════
+// GOOGLE SHEETS SYNC (append row)
+// ══════════════════════════════════════════════
+
+async function syncMasterToSheets(rec) {
+  const id = localStorage.getItem('knsap_sheet_id');
+  const key = localStorage.getItem('knsap_api_key');
+  if (!id || !key) return;
+  // Build row in MASTERS sheet column order
+  const row = [rec['NAME OF MASTER'], rec['GENDER'], rec['D.O. B.'], rec['AGE'],
+    rec['MASTER ID NO'], rec['SKILL'], rec['NAME OF BUSINESS'], rec['REGISTERED?'],
+    rec['LOCATION OF BUSINESS'], rec['LANDMARK'], rec['PHONE NUMBER 1'],
+    rec['PHONE NUMBER 2'], ''];
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/MASTERS!A:M:append?valueInputOption=USER_ENTERED&key=${key}`;
+    await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ values: [row] }) });
+    showToast('☁️ Synced to Google Sheets');
+  } catch(e) { /* silent fail — local save already done */ }
+}
+
+async function syncTraineeToSheets(rec) {
+  const id = localStorage.getItem('knsap_sheet_id');
+  const key = localStorage.getItem('knsap_api_key');
+  if (!id || !key) return;
+  const row = [rec['NAME OF TRAINEE'], rec['GENDER'], rec['D.O. B.'], rec['AGE'],
+    rec['TRAINEE ID NO'], rec['SKILL'], rec['LEVEL OF EDUCATION'],
+    rec['GUARANTOR NAME'], rec['GUARANTOR CONTACT'], rec['ZONE'],
+    rec['PHONE NUMBER 1'], rec['PHONE NUMBER 2'], ''];
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/TRAINEES!A:M:append?valueInputOption=USER_ENTERED&key=${key}`;
+    await fetch(url, { method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ values: [row] }) });
+    showToast('☁️ Synced to Google Sheets');
+  } catch(e) { /* silent */ }
+}
+
+// ══════════════════════════════════════════════
+// CLEAR FORMS
+// ══════════════════════════════════════════════
+
+function clearMasterForm() {
+  ['m-id','m-name','m-phone1','m-phone2','m-dob','m-age','m-national-id',
+   'm-digital-addr','m-address','m-business','m-biz-location','m-landmark',
+   'm-experience','m-guarantor-name','m-guarantor-contact','m-notes','m-branch','m-skill'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['m-gender','m-cohort','m-zone','m-registered'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['m-agreement-val','m-moa-val','m-grad-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = false;
+  });
+  ['track-m-agreement','track-m-moa','track-m-grad'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('checked');
+  });
+  const preview = document.getElementById('master-photo-preview');
+  const icon = document.getElementById('master-photo-icon');
+  if (preview) { preview.src=''; preview.style.display='none'; }
+  if (icon) icon.style.display='flex';
+  document.getElementById('m-dup-warn')?.classList.remove('show');
+}
+
+function clearTraineeForm() {
+  ['t-id','t-name','t-phone1','t-phone2','t-dob','t-age','t-national-id',
+   't-digital-addr','t-address','t-master','t-enrol-date',
+   't-guarantor-name','t-guarantor-contact','t-guarantor-address','t-notes','t-branch','t-skill'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  ['t-gender','t-cohort','t-zone','t-education','t-disability','t-employment','t-guarantor-rel'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = el.id === 't-disability' ? 'NONE' : '';
+  });
+  ['t-prospectus-val','t-moa-val','t-equipment-val'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.checked = false;
+  });
+  ['track-t-prospectus','track-t-moa','track-t-equipment'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.classList.remove('checked');
+  });
+  const preview = document.getElementById('trainee-photo-preview');
+  const icon = document.getElementById('trainee-photo-icon');
+  if (preview) { preview.src=''; preview.style.display='none'; }
+  if (icon) icon.style.display='flex';
+  document.getElementById('t-dup-warn')?.classList.remove('show');
+}
+
+// ══════════════════════════════════════════════
+// EXPORT FUNCTIONS
+// ══════════════════════════════════════════════
+
+function exportMastersCSV() {
+  const data = getMastersData();
+  const headers = ['NAME','GENDER','ZONE','BRANCH','SKILL','PHONE 1','COHORT','TRAINEES','AGREEMENT','MOA'];
+  const csv = [headers.join(','), ...data.map(m => [
+    '"'+m.name+'"',m.gender||'',m.zone||'','"'+m.branch+'"','"'+m.skills+'"',
+    m.contact||m.phone1||'',m.cohort,m.trainees,m.agreement||'',m.mform||''
+  ].join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'KN_SAP_Masters.csv'; a.click();
+  showToast('Masters exported to CSV');
+}
+
+function exportTraineesCSV() {
+  const data = getTraineesData();
+  const headers = ['NAME','GENDER','ZONE','BRANCH','SKILL','PHONE 1','MASTER','COHORT','EDUCATION','PROSPECTUS','A.FORM'];
+  const csv = [headers.join(','), ...data.map(r => [
+    '"'+(r['NAME OF TRAINEE']||'')+'"', r['TRAINEE GENDER']||r['GENDER']||'',
+    r.ZONE||'', '"'+(r['BRANCH NAME']||'')+'"', r.SKILLS||'',
+    r['CONTACT OF TRAINEE']||r['PHONE NUMBER 1']||'',
+    '"'+(r['NAME OF MASTER']||'')+'"', r.COHORT,
+    r['LEVEL OF EDUCATION']||'', r.PROSPECTUS||'', r.A_FORM||''
+  ].join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv'}));
+  a.download = 'KN_SAP_Trainees.csv'; a.click();
+  showToast('Trainees exported to CSV');
+}
+
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -1158,6 +1548,319 @@ footer span { color: var(--orange-light); font-weight: 600; }
 .ua-admin { background: var(--orange); }
 .ua-editor { background: var(--navy); }
 
+
+/* ─── PERSONAL RECORDS TABS ─── */
+.page-tabs {
+  display: flex;
+  background: var(--white);
+  border-bottom: 2px solid var(--gray-200);
+  padding: 0 28px;
+  gap: 0;
+  flex-shrink: 0;
+}
+
+.page-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 14px 20px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--gray-500);
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.18s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.page-tab-btn svg { opacity: 0.6; }
+.page-tab-btn:hover { color: var(--navy); }
+.page-tab-btn.active { color: var(--orange); border-color: var(--orange); }
+.page-tab-btn.active svg { opacity: 1; stroke: var(--orange); }
+
+.page-tab-content { display: none; }
+.page-tab-content.active { display: block; }
+
+/* ─── ENTRY FORM CARD ─── */
+.entry-form-wrap {
+  padding: 24px 28px;
+}
+
+.entry-form-card {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  overflow: hidden;
+}
+
+.entry-form-header {
+  background: linear-gradient(135deg, var(--navy-dark) 0%, var(--navy-light) 100%);
+  padding: 20px 26px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.entry-form-header-icon {
+  width: 44px;
+  height: 44px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.entry-form-header-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 17px;
+  font-weight: 800;
+  color: white;
+}
+
+.entry-form-header-sub {
+  font-size: 12px;
+  color: rgba(255,255,255,0.65);
+  margin-top: 2px;
+}
+
+.entry-form-body {
+  padding: 26px;
+}
+
+.form-section-title {
+  font-family: 'Syne', sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--navy);
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  margin-bottom: 14px;
+  margin-top: 24px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--gray-100);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.form-section-title:first-child { margin-top: 0; }
+
+.form-section-title span {
+  width: 6px;
+  height: 6px;
+  background: var(--orange);
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.form-grid-4 {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 16px;
+}
+
+.form-group.span2 { grid-column: span 2; }
+.form-group.span3 { grid-column: span 3; }
+.form-group.span4 { grid-column: span 4; }
+
+.entry-form-footer {
+  padding: 18px 26px;
+  border-top: 1px solid var(--gray-100);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--gray-50);
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.entry-form-footer-info {
+  font-size: 12px;
+  color: var(--gray-500);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.entry-form-footer-actions {
+  display: flex;
+  gap: 10px;
+}
+
+/* ─── PHOTO UPLOAD ─── */
+.photo-upload-box {
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: var(--gray-50);
+  position: relative;
+}
+
+.photo-upload-box:hover { border-color: var(--orange); background: var(--orange-pale); }
+.photo-upload-box input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+
+.photo-upload-preview {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid var(--orange);
+  display: none;
+  margin: 0 auto 8px;
+}
+
+.photo-upload-icon {
+  width: 48px;
+  height: 48px;
+  background: var(--gray-200);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 8px;
+}
+
+.photo-upload-text {
+  font-size: 12px;
+  color: var(--gray-500);
+  font-weight: 500;
+}
+
+.photo-upload-text strong { color: var(--orange); }
+
+/* ─── TRACKING CHECKLIST ─── */
+.tracking-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.tracking-item {
+  background: var(--white);
+  border: 1.5px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.tracking-item:hover { border-color: var(--orange); background: var(--orange-pale); }
+.tracking-item.checked { border-color: var(--green); background: var(--green-pale); }
+
+.tracking-item input { display: none; }
+
+.tracking-check {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--gray-300);
+  border-radius: 5px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.15s;
+}
+
+.tracking-item.checked .tracking-check {
+  background: var(--green);
+  border-color: var(--green);
+}
+
+.tracking-item.checked .tracking-check::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border-right: 2px solid white;
+  border-bottom: 2px solid white;
+  transform: rotate(45deg) translateY(-1px);
+  display: block;
+}
+
+.tracking-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--gray-700);
+}
+
+.tracking-item.checked .tracking-label { color: var(--green); }
+
+/* ─── FORM REQUIRED STAR ─── */
+.req { color: var(--orange); margin-left: 2px; }
+
+/* ─── SUCCESS BANNER ─── */
+.save-success {
+  display: none;
+  background: var(--green-pale);
+  border: 1.5px solid #86efac;
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #15803d;
+  margin-bottom: 20px;
+  align-items: center;
+  gap: 8px;
+}
+
+.save-success.show { display: flex; }
+
+/* ─── DUPLICATE WARNING ─── */
+.dup-warning {
+  display: none;
+  background: var(--amber-pale);
+  border: 1.5px solid #fcd34d;
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 12px;
+  color: #92400e;
+  margin-top: 4px;
+  align-items: center;
+  gap: 6px;
+}
+
+.dup-warning.show { display: flex; }
+
+/* ─── RESPONSIVE ─── */
+@media (max-width: 900px) {
+  .form-grid-3 { grid-template-columns: 1fr 1fr; }
+  .form-grid-4 { grid-template-columns: 1fr 1fr; }
+  .form-group.span3 { grid-column: span 2; }
+  .form-group.span4 { grid-column: span 2; }
+  .entry-form-wrap { padding: 16px; }
+  .page-tabs { padding: 0 16px; overflow-x: auto; }
+}
+
+@media (max-width: 600px) {
+  .form-grid-3, .form-grid-2, .form-grid-4 { grid-template-columns: 1fr; }
+  .form-group.span2, .form-group.span3, .form-group.span4 { grid-column: span 1; }
+  .tracking-grid { grid-template-columns: 1fr; }
+}
+
 </style>
 </head>
 <body>
@@ -1404,63 +2107,294 @@ footer span { color: var(--orange-light); font-weight: 600; }
       <div class="page-header">
         <div>
           <div class="page-title">Master Trainers</div>
-          <div class="page-subtitle">All registered master trainers in the programme</div>
+          <div class="page-subtitle">View, register and manage all master trainers</div>
         </div>
-        <button class="btn btn-primary" onclick="openAddMasterModal()">
+        <button class="btn btn-primary" onclick="switchMasterTab('master-entry')">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Master
+          Register New Master
         </button>
       </div>
-      <div class="page-content">
-        <div class="filters-bar">
-          <div class="search-wrap">
-            <svg width="14" height="14" fill="none" stroke="#7a8899" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            <input class="search-input" type="text" placeholder="Search masters…" id="master-search" oninput="filterMasters()">
+
+      <!-- PAGE TABS -->
+      <div class="page-tabs" id="master-page-tabs">
+        <button class="page-tab-btn active" onclick="switchMasterTab('master-records')" id="tab-btn-master-records">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          Records
+          <span class="sidebar-badge" id="master-records-count" style="background:var(--navy)">0</span>
+        </button>
+        <button class="page-tab-btn" onclick="switchMasterTab('master-entry')" id="tab-btn-master-entry">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Register Master
+        </button>
+      </div>
+
+      <!-- TAB: RECORDS -->
+      <div class="page-tab-content active" id="master-records">
+        <div class="page-content">
+          <div class="filters-bar">
+            <div class="search-wrap">
+              <svg width="14" height="14" fill="none" stroke="#7a8899" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input class="search-input" type="text" placeholder="Search by name, zone, skill…" id="master-search" oninput="filterMasters()">
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">Zone</span>
+              <select class="filter-select" id="f-master-zone" onchange="filterMasters()">
+                <option value="">All Zones</option>
+                <option value="AFIFE">Afife</option>
+                <option value="DZODZE">Dzodze</option>
+                <option value="PENYI">Penyi</option>
+                <option value="WETA">Weta</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">Skill</span>
+              <select class="filter-select" id="f-master-skill" onchange="filterMasters()">
+                <option value="">All Skills</option>
+              </select>
+            </div>
           </div>
-          <div class="filter-group">
-            <span class="filter-label">Zone</span>
-            <select class="filter-select" id="f-master-zone" onchange="filterMasters()">
-              <option value="">All Zones</option>
-              <option value="AFIFE">Afife</option>
-              <option value="DZODZE">Dzodze</option>
-              <option value="PENYI">Penyi</option>
-              <option value="WETA">Weta</option>
-            </select>
+          <div class="table-container">
+            <div class="table-toolbar">
+              <div class="table-info">Showing <strong id="master-count">0</strong> masters</div>
+              <div class="table-actions">
+                <button class="btn btn-outline btn-sm" onclick="exportMastersCSV()">Export CSV</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table id="masters-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Master Name</th>
+                    <th>Gender</th>
+                    <th>Zone</th>
+                    <th>Branch</th>
+                    <th>Skill</th>
+                    <th>Phone 1</th>
+                    <th>Cohort</th>
+                    <th>Trainees</th>
+                    <th>Agreement</th>
+                    <th>MOA</th>
+                    <th>Grad Fee</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="masters-tbody"></tbody>
+              </table>
+            </div>
+            <div class="pagination" id="masters-pagination"></div>
           </div>
-          <div class="filter-group">
-            <span class="filter-label">Skill</span>
-            <select class="filter-select" id="f-master-skill" onchange="filterMasters()">
-              <option value="">All Skills</option>
-            </select>
-          </div>
-        </div>
-        <div class="table-container">
-          <div class="table-toolbar">
-            <div class="table-info">Showing <strong id="master-count">0</strong> masters</div>
-          </div>
-          <div class="table-scroll">
-            <table id="masters-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Master Name</th>
-                  <th>Zone</th>
-                  <th>Branch</th>
-                  <th>Skill</th>
-                  <th>Contact</th>
-                  <th>Cohort</th>
-                  <th>Trainees</th>
-                  <th>Agreement</th>
-                  <th>MOA</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="masters-tbody"></tbody>
-            </table>
-          </div>
-          <div class="pagination" id="masters-pagination"></div>
         </div>
       </div>
+
+      <!-- TAB: REGISTER MASTER FORM -->
+      <div class="page-tab-content" id="master-entry">
+        <div class="entry-form-wrap">
+          <div id="master-save-success" class="save-success">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Master trainer registered successfully! Record has been saved.
+          </div>
+
+          <div class="entry-form-card">
+            <div class="entry-form-header">
+              <div class="entry-form-header-icon">
+                <svg width="22" height="22" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+              </div>
+              <div>
+                <div class="entry-form-header-title">Master Trainer Registration</div>
+                <div class="entry-form-header-sub">Complete all required fields to register a new master trainer</div>
+              </div>
+            </div>
+
+            <div class="entry-form-body">
+
+              <!-- SECTION: PHOTO -->
+              <div class="form-section-title"><span></span> Passport Photo</div>
+              <div class="form-grid-2" style="align-items:start">
+                <div class="photo-upload-box" onclick="document.getElementById('master-photo-input').click()">
+                  <input type="file" id="master-photo-input" accept="image/*" onchange="previewPhoto(this,'master-photo-preview','master-photo-icon')">
+                  <img id="master-photo-preview" class="photo-upload-preview" alt="Photo preview">
+                  <div id="master-photo-icon" class="photo-upload-icon">
+                    <svg width="22" height="22" fill="none" stroke="#7a8899" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  </div>
+                  <div class="photo-upload-text"><strong>Click to upload</strong> passport photo<br><span style="font-size:11px">JPG, PNG — max 2MB</span></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px;padding-top:4px">
+                  <div class="alert alert-info" style="font-size:12px;padding:10px 12px">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Photo should be clear, recent, and show the face plainly with a plain background.
+                  </div>
+                  <div class="form-group">
+                    <label>Master ID No</label>
+                    <input type="text" id="m-id" placeholder="e.g. KN-M-001" oninput="checkMasterDuplicate(this.value)">
+                    <div class="dup-warning" id="m-dup-warn">
+                      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                      A master with this ID already exists in the database.
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- SECTION: PERSONAL -->
+              <div class="form-section-title"><span></span> Personal Information</div>
+              <div class="form-grid-3">
+                <div class="form-group span2">
+                  <label>Full Name <span class="req">*</span></label>
+                  <input type="text" id="m-name" placeholder="Surname and other names" oninput="this.value=this.value.toUpperCase()">
+                </div>
+                <div class="form-group">
+                  <label>Gender <span class="req">*</span></label>
+                  <select id="m-gender">
+                    <option value="">Select gender</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Date of Birth</label>
+                  <input type="date" id="m-dob" onchange="calcMasterAge()">
+                </div>
+                <div class="form-group">
+                  <label>Age</label>
+                  <input type="number" id="m-age" placeholder="Auto-calculated" readonly style="background:var(--gray-50)">
+                </div>
+                <div class="form-group">
+                  <label>Ghana Card / National ID</label>
+                  <input type="text" id="m-national-id" placeholder="GHA-XXXXXXXX-X">
+                </div>
+              </div>
+
+              <!-- SECTION: CONTACT -->
+              <div class="form-section-title"><span></span> Contact Information</div>
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label>Phone Number 1 <span class="req">*</span></label>
+                  <input type="tel" id="m-phone1" placeholder="0XX XXX XXXX">
+                </div>
+                <div class="form-group">
+                  <label>Phone Number 2</label>
+                  <input type="tel" id="m-phone2" placeholder="0XX XXX XXXX (optional)">
+                </div>
+                <div class="form-group">
+                  <label>Digital Address</label>
+                  <input type="text" id="m-digital-addr" placeholder="e.g. ER-0012-3456">
+                </div>
+                <div class="form-group span3">
+                  <label>Residential Address</label>
+                  <input type="text" id="m-address" placeholder="Town / Community name">
+                </div>
+              </div>
+
+              <!-- SECTION: PROGRAMME -->
+              <div class="form-section-title"><span></span> Programme Details</div>
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label>Cohort <span class="req">*</span></label>
+                  <select id="m-cohort">
+                    <option value="">Select cohort</option>
+                    <option value="1">Cohort 1</option>
+                    <option value="2">Cohort 2</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Zone <span class="req">*</span></label>
+                  <select id="m-zone">
+                    <option value="">Select zone</option>
+                    <option value="AFIFE">Afife</option>
+                    <option value="DZODZE">Dzodze</option>
+                    <option value="PENYI">Penyi</option>
+                    <option value="WETA">Weta</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Branch Name <span class="req">*</span></label>
+                  <input type="text" id="m-branch" placeholder="e.g. ADIDOKPUI A" oninput="this.value=this.value.toUpperCase()">
+                </div>
+                <div class="form-group">
+                  <label>Vocation / Skill <span class="req">*</span></label>
+                  <input type="text" id="m-skill" placeholder="e.g. DRESSMAKING" oninput="this.value=this.value.toUpperCase()">
+                </div>
+                <div class="form-group">
+                  <label>Name of Business</label>
+                  <input type="text" id="m-business" placeholder="Business / shop name">
+                </div>
+                <div class="form-group">
+                  <label>Business Registered?</label>
+                  <select id="m-registered">
+                    <option value="">Select</option>
+                    <option value="YES">Yes</option>
+                    <option value="NO">No</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Location of Business</label>
+                  <input type="text" id="m-biz-location" placeholder="Street / area">
+                </div>
+                <div class="form-group">
+                  <label>Landmark</label>
+                  <input type="text" id="m-landmark" placeholder="Near / opposite...">
+                </div>
+                <div class="form-group">
+                  <label>Years of Experience</label>
+                  <input type="number" id="m-experience" placeholder="e.g. 5" min="0">
+                </div>
+              </div>
+
+              <!-- SECTION: TRACKING -->
+              <div class="form-section-title"><span></span> Compliance Tracking</div>
+              <div class="tracking-grid">
+                <label class="tracking-item" id="track-m-agreement" onclick="toggleTracking(this,'m-agreement-val')">
+                  <input type="checkbox" id="m-agreement-val">
+                  <div class="tracking-check"></div>
+                  <div class="tracking-label">Agreement Fee Paid</div>
+                </label>
+                <label class="tracking-item" id="track-m-moa" onclick="toggleTracking(this,'m-moa-val')">
+                  <input type="checkbox" id="m-moa-val">
+                  <div class="tracking-check"></div>
+                  <div class="tracking-label">MOA Form Completed</div>
+                </label>
+                <label class="tracking-item" id="track-m-grad" onclick="toggleTracking(this,'m-grad-val')">
+                  <input type="checkbox" id="m-grad-val">
+                  <div class="tracking-check"></div>
+                  <div class="tracking-label">Graduation Fee Paid</div>
+                </label>
+              </div>
+
+              <!-- SECTION: GUARANTOR -->
+              <div class="form-section-title"><span></span> Guarantor Information</div>
+              <div class="form-grid-3">
+                <div class="form-group span2">
+                  <label>Guarantor Full Name</label>
+                  <input type="text" id="m-guarantor-name" placeholder="Full name of guarantor">
+                </div>
+                <div class="form-group">
+                  <label>Guarantor Contact</label>
+                  <input type="tel" id="m-guarantor-contact" placeholder="Phone number">
+                </div>
+                <div class="form-group span3">
+                  <label>Additional Notes</label>
+                  <textarea id="m-notes" rows="3" placeholder="Any additional information about this master trainer…"></textarea>
+                </div>
+              </div>
+
+            </div><!-- /entry-form-body -->
+
+            <div class="entry-form-footer">
+              <div class="entry-form-footer-info">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Fields marked <span class="req">*</span> are required. Records are saved to the programme database.
+              </div>
+              <div class="entry-form-footer-actions">
+                <button class="btn btn-outline" onclick="clearMasterForm()">Clear Form</button>
+                <button class="btn btn-primary btn-lg" onclick="saveMasterRecord()">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save Master Record
+                </button>
+              </div>
+            </div>
+          </div><!-- /entry-form-card -->
+        </div><!-- /entry-form-wrap -->
+      </div><!-- /master-entry tab -->
     </div>
 
     <!-- ── TRAINEES PAGE ── -->
@@ -1468,71 +2402,340 @@ footer span { color: var(--orange-light); font-weight: 600; }
       <div class="page-header">
         <div>
           <div class="page-title">Trainees</div>
-          <div class="page-subtitle">All enrolled trainees in the programme</div>
+          <div class="page-subtitle">View, enrol and manage all programme trainees</div>
         </div>
-        <button class="btn btn-primary" onclick="openAddTraineeModal()">
+        <button class="btn btn-primary" onclick="switchTraineeTab('trainee-entry')">
           <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Trainee
+          Enrol New Trainee
         </button>
       </div>
-      <div class="page-content">
-        <div class="filters-bar">
-          <div class="search-wrap">
-            <svg width="14" height="14" fill="none" stroke="#7a8899" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-            <input class="search-input" type="text" placeholder="Search trainees…" id="trainee-search" oninput="filterTrainees()">
+
+      <!-- PAGE TABS -->
+      <div class="page-tabs" id="trainee-page-tabs">
+        <button class="page-tab-btn active" onclick="switchTraineeTab('trainee-records')" id="tab-btn-trainee-records">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>
+          Records
+          <span class="sidebar-badge" id="trainee-records-count" style="background:var(--orange)">0</span>
+        </button>
+        <button class="page-tab-btn" onclick="switchTraineeTab('trainee-entry')" id="tab-btn-trainee-entry">
+          <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>
+          Enrol Trainee
+        </button>
+      </div>
+
+      <!-- TAB: RECORDS -->
+      <div class="page-tab-content active" id="trainee-records">
+        <div class="page-content">
+          <div class="filters-bar">
+            <div class="search-wrap">
+              <svg width="14" height="14" fill="none" stroke="#7a8899" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+              <input class="search-input" type="text" placeholder="Search by name, zone, skill…" id="trainee-search" oninput="filterTrainees()">
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">Zone</span>
+              <select class="filter-select" id="f-trainee-zone" onchange="filterTrainees()">
+                <option value="">All Zones</option>
+                <option value="AFIFE">Afife</option>
+                <option value="DZODZE">Dzodze</option>
+                <option value="PENYI">Penyi</option>
+                <option value="WETA">Weta</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">Skill</span>
+              <select class="filter-select" id="f-trainee-skill" onchange="filterTrainees()">
+                <option value="">All Skills</option>
+              </select>
+            </div>
+            <div class="filter-group">
+              <span class="filter-label">Cohort</span>
+              <select class="filter-select" id="f-trainee-cohort" onchange="filterTrainees()">
+                <option value="">All</option>
+                <option value="1">Cohort 1</option>
+                <option value="2">Cohort 2</option>
+              </select>
+            </div>
           </div>
-          <div class="filter-group">
-            <span class="filter-label">Zone</span>
-            <select class="filter-select" id="f-trainee-zone" onchange="filterTrainees()">
-              <option value="">All Zones</option>
-              <option value="AFIFE">Afife</option>
-              <option value="DZODZE">Dzodze</option>
-              <option value="PENYI">Penyi</option>
-              <option value="WETA">Weta</option>
-            </select>
+          <div class="table-container">
+            <div class="table-toolbar">
+              <div class="table-info">Showing <strong id="trainee-count">0</strong> trainees</div>
+              <div class="table-actions">
+                <button class="btn btn-outline btn-sm" onclick="exportTraineesCSV()">Export CSV</button>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table id="trainees-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Trainee Name</th>
+                    <th>Gender</th>
+                    <th>Zone</th>
+                    <th>Branch</th>
+                    <th>Skill</th>
+                    <th>Phone 1</th>
+                    <th>Master</th>
+                    <th>Cohort</th>
+                    <th>Education</th>
+                    <th>Prospectus</th>
+                    <th>A.Form</th>
+                    <th>Equipment</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="trainees-tbody"></tbody>
+              </table>
+            </div>
+            <div class="pagination" id="trainees-pagination"></div>
           </div>
-          <div class="filter-group">
-            <span class="filter-label">Skill</span>
-            <select class="filter-select" id="f-trainee-skill" onchange="filterTrainees()">
-              <option value="">All Skills</option>
-            </select>
-          </div>
-          <div class="filter-group">
-            <span class="filter-label">Cohort</span>
-            <select class="filter-select" id="f-trainee-cohort" onchange="filterTrainees()">
-              <option value="">All</option>
-              <option value="1">Cohort 1</option>
-              <option value="2">Cohort 2</option>
-            </select>
-          </div>
-        </div>
-        <div class="table-container">
-          <div class="table-toolbar">
-            <div class="table-info">Showing <strong id="trainee-count">0</strong> trainees</div>
-          </div>
-          <div class="table-scroll">
-            <table id="trainees-table">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Trainee Name</th>
-                  <th>Zone</th>
-                  <th>Branch</th>
-                  <th>Skill</th>
-                  <th>Contact</th>
-                  <th>Master</th>
-                  <th>Cohort</th>
-                  <th>Prospectus</th>
-                  <th>A.Form</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody id="trainees-tbody"></tbody>
-            </table>
-          </div>
-          <div class="pagination" id="trainees-pagination"></div>
         </div>
       </div>
+
+      <!-- TAB: ENROL TRAINEE FORM -->
+      <div class="page-tab-content" id="trainee-entry">
+        <div class="entry-form-wrap">
+          <div id="trainee-save-success" class="save-success">
+            <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+            Trainee enrolled successfully! Record has been saved to the database.
+          </div>
+
+          <div class="entry-form-card">
+            <div class="entry-form-header" style="background:linear-gradient(135deg,#c2410c,#ea580c)">
+              <div class="entry-form-header-icon">
+                <svg width="22" height="22" fill="none" stroke="white" stroke-width="2" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+              </div>
+              <div>
+                <div class="entry-form-header-title">Trainee Enrolment Form</div>
+                <div class="entry-form-header-sub">Complete all required fields to enrol a new trainee into the programme</div>
+              </div>
+            </div>
+
+            <div class="entry-form-body">
+
+              <!-- SECTION: PHOTO -->
+              <div class="form-section-title"><span></span> Passport Photo</div>
+              <div class="form-grid-2" style="align-items:start">
+                <div class="photo-upload-box" onclick="document.getElementById('trainee-photo-input').click()">
+                  <input type="file" id="trainee-photo-input" accept="image/*" onchange="previewPhoto(this,'trainee-photo-preview','trainee-photo-icon')">
+                  <img id="trainee-photo-preview" class="photo-upload-preview" alt="">
+                  <div id="trainee-photo-icon" class="photo-upload-icon">
+                    <svg width="22" height="22" fill="none" stroke="#7a8899" stroke-width="1.5" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                  </div>
+                  <div class="photo-upload-text"><strong>Click to upload</strong> passport photo<br><span style="font-size:11px">JPG, PNG — max 2MB</span></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px;padding-top:4px">
+                  <div class="form-group">
+                    <label>Trainee ID No</label>
+                    <input type="text" id="t-id" placeholder="e.g. KN-T-001" oninput="checkTraineeDuplicate(this.value)">
+                    <div class="dup-warning" id="t-dup-warn">
+                      <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/></svg>
+                      A trainee with this ID already exists in the database.
+                    </div>
+                  </div>
+                  <div class="alert alert-info" style="font-size:12px;padding:10px 12px">
+                    <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                    Passport photo is required for official programme ID cards and records.
+                  </div>
+                </div>
+              </div>
+
+              <!-- SECTION: PERSONAL -->
+              <div class="form-section-title"><span></span> Personal Information</div>
+              <div class="form-grid-3">
+                <div class="form-group span2">
+                  <label>Full Name <span class="req">*</span></label>
+                  <input type="text" id="t-name" placeholder="Surname and other names" oninput="this.value=this.value.toUpperCase()">
+                </div>
+                <div class="form-group">
+                  <label>Gender <span class="req">*</span></label>
+                  <select id="t-gender">
+                    <option value="">Select gender</option>
+                    <option value="MALE">Male</option>
+                    <option value="FEMALE">Female</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Date of Birth</label>
+                  <input type="date" id="t-dob" onchange="calcTraineeAge()">
+                </div>
+                <div class="form-group">
+                  <label>Age</label>
+                  <input type="number" id="t-age" placeholder="Auto-calculated" readonly style="background:var(--gray-50)">
+                </div>
+                <div class="form-group">
+                  <label>Ghana Card / National ID</label>
+                  <input type="text" id="t-national-id" placeholder="GHA-XXXXXXXX-X">
+                </div>
+              </div>
+
+              <!-- SECTION: CONTACT -->
+              <div class="form-section-title"><span></span> Contact Information</div>
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label>Phone Number 1 <span class="req">*</span></label>
+                  <input type="tel" id="t-phone1" placeholder="0XX XXX XXXX">
+                </div>
+                <div class="form-group">
+                  <label>Phone Number 2</label>
+                  <input type="tel" id="t-phone2" placeholder="0XX XXX XXXX (optional)">
+                </div>
+                <div class="form-group">
+                  <label>Digital Address</label>
+                  <input type="text" id="t-digital-addr" placeholder="e.g. ER-0012-3456">
+                </div>
+                <div class="form-group span3">
+                  <label>Residential Address / Community</label>
+                  <input type="text" id="t-address" placeholder="Town / Community name">
+                </div>
+              </div>
+
+              <!-- SECTION: EDUCATION -->
+              <div class="form-section-title"><span></span> Education & Background</div>
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label>Level of Education <span class="req">*</span></label>
+                  <select id="t-education">
+                    <option value="">Select level</option>
+                    <option value="NO FORMAL EDUCATION">No Formal Education</option>
+                    <option value="PRIMARY">Primary</option>
+                    <option value="JHS">JHS (Junior High School)</option>
+                    <option value="SHS">SHS (Senior High School)</option>
+                    <option value="VOCATIONAL">Vocational / Technical</option>
+                    <option value="TERTIARY">Tertiary / University</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Disability Status</label>
+                  <select id="t-disability">
+                    <option value="NONE">None</option>
+                    <option value="PHYSICAL">Physical</option>
+                    <option value="VISUAL">Visual</option>
+                    <option value="HEARING">Hearing</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Employment Status (Before)</label>
+                  <select id="t-employment">
+                    <option value="">Select</option>
+                    <option value="UNEMPLOYED">Unemployed</option>
+                    <option value="SELF-EMPLOYED">Self-employed</option>
+                    <option value="EMPLOYED">Employed</option>
+                    <option value="STUDENT">Student</option>
+                  </select>
+                </div>
+              </div>
+
+              <!-- SECTION: PROGRAMME -->
+              <div class="form-section-title"><span></span> Programme Details</div>
+              <div class="form-grid-3">
+                <div class="form-group">
+                  <label>Cohort <span class="req">*</span></label>
+                  <select id="t-cohort">
+                    <option value="">Select cohort</option>
+                    <option value="1">Cohort 1</option>
+                    <option value="2">Cohort 2</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Zone <span class="req">*</span></label>
+                  <select id="t-zone">
+                    <option value="">Select zone</option>
+                    <option value="AFIFE">Afife</option>
+                    <option value="DZODZE">Dzodze</option>
+                    <option value="PENYI">Penyi</option>
+                    <option value="WETA">Weta</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>Branch Name <span class="req">*</span></label>
+                  <input type="text" id="t-branch" placeholder="e.g. ADIDOKPUI A" oninput="this.value=this.value.toUpperCase()">
+                </div>
+                <div class="form-group">
+                  <label>Skill / Vocation <span class="req">*</span></label>
+                  <input type="text" id="t-skill" placeholder="e.g. DRESSMAKING" oninput="this.value=this.value.toUpperCase()">
+                </div>
+                <div class="form-group span2">
+                  <label>Assigned Master Trainer <span class="req">*</span></label>
+                  <input type="text" id="t-master" placeholder="Full name of master trainer" oninput="this.value=this.value.toUpperCase()">
+                </div>
+                <div class="form-group">
+                  <label>Enrolment Date</label>
+                  <input type="date" id="t-enrol-date">
+                </div>
+              </div>
+
+              <!-- SECTION: TRACKING -->
+              <div class="form-section-title"><span></span> Compliance Tracking</div>
+              <div class="tracking-grid">
+                <label class="tracking-item" id="track-t-prospectus" onclick="toggleTracking(this,'t-prospectus-val')">
+                  <input type="checkbox" id="t-prospectus-val">
+                  <div class="tracking-check"></div>
+                  <div class="tracking-label">Prospectus Fee Paid</div>
+                </label>
+                <label class="tracking-item" id="track-t-moa" onclick="toggleTracking(this,'t-moa-val')">
+                  <input type="checkbox" id="t-moa-val">
+                  <div class="tracking-check"></div>
+                  <div class="tracking-label">MOA Form Completed</div>
+                </label>
+                <label class="tracking-item" id="track-t-equipment" onclick="toggleTracking(this,'t-equipment-val')">
+                  <input type="checkbox" id="t-equipment-val">
+                  <div class="tracking-check"></div>
+                  <div class="tracking-label">Equipment Received (after 3 months)</div>
+                </label>
+              </div>
+
+              <!-- SECTION: GUARANTOR -->
+              <div class="form-section-title"><span></span> Guarantor Information</div>
+              <div class="form-grid-3">
+                <div class="form-group span2">
+                  <label>Guarantor Full Name</label>
+                  <input type="text" id="t-guarantor-name" placeholder="Full name of guarantor">
+                </div>
+                <div class="form-group">
+                  <label>Guarantor Contact</label>
+                  <input type="tel" id="t-guarantor-contact" placeholder="Phone number">
+                </div>
+                <div class="form-group">
+                  <label>Guarantor Relationship</label>
+                  <select id="t-guarantor-rel">
+                    <option value="">Select</option>
+                    <option value="PARENT">Parent</option>
+                    <option value="SIBLING">Sibling</option>
+                    <option value="SPOUSE">Spouse</option>
+                    <option value="GUARDIAN">Guardian</option>
+                    <option value="OTHER">Other</option>
+                  </select>
+                </div>
+                <div class="form-group span2">
+                  <label>Guarantor Address</label>
+                  <input type="text" id="t-guarantor-address" placeholder="Guarantor residential address">
+                </div>
+                <div class="form-group span3">
+                  <label>Additional Notes</label>
+                  <textarea id="t-notes" rows="3" placeholder="Any additional information about this trainee…"></textarea>
+                </div>
+              </div>
+
+            </div><!-- /entry-form-body -->
+
+            <div class="entry-form-footer">
+              <div class="entry-form-footer-info">
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Fields marked <span class="req">*</span> are required. Record will be saved to the TRAINEES sheet.
+              </div>
+              <div class="entry-form-footer-actions">
+                <button class="btn btn-outline" onclick="clearTraineeForm()">Clear Form</button>
+                <button class="btn btn-primary btn-lg" onclick="saveTraineeRecord()" style="background:var(--orange)">
+                  <svg width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 01-2-2V5a2 2 0 012-2h11l5 5v11a2 2 0 01-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                  Save Trainee Record
+                </button>
+              </div>
+            </div>
+          </div><!-- /entry-form-card -->
+        </div><!-- /entry-form-wrap -->
+      </div><!-- /trainee-entry tab -->
     </div>
 
     <!-- ── ADMIN PAGE ── -->
@@ -1997,8 +3200,8 @@ function showPage(name) {
   document.querySelectorAll(`[onclick="showPage('${name}')"]`).forEach(el => el.classList.add('active'));
   if (name === 'dashboard') updateDashboard();
   if (name === 'cohorts') { currentPageCohorts=1; renderCohorts(); }
-  if (name === 'masters') { currentPageMasters=1; renderMasters(); }
-  if (name === 'trainees') { currentPageTrainees=1; renderTrainees(); }
+  if (name === 'masters') { currentPageMasters=1; renderMasters(); updateMasterRecordCount(); }
+  if (name === 'trainees') { currentPageTrainees=1; renderTrainees(); updateTraineeRecordCount(); }
   if (name === 'admin') renderUsersAdmin();
   if (name === 'activity') renderActivityLog();
 }
@@ -2280,8 +3483,12 @@ function getMastersData() {
     if (!grouped[name]) {
       grouped[name] = {
         name, zone: r.ZONE, branch: r['BRANCH NAME'], cohort: r.COHORT,
-        contact: r['CONTACT OF MASTER'], skills: new Set(), trainees: 0,
-        agreement: r.AGREEMENT, mform: r.M_FORM, idx: DB.indexOf(r)
+        contact: r['CONTACT OF MASTER'], phone1: r['PHONE NUMBER 1']||'',
+        gender: r['GENDER']||r['MASTER GENDER']||'',
+        skills: new Set(), trainees: 0,
+        agreement: r.AGREEMENT, mform: r.M_FORM,
+        gradFee: r['GRADUATION FEE']||'',
+        idx: DB.indexOf(r)
       };
     }
     grouped[name].trainees++;
@@ -2307,14 +3514,16 @@ function renderMasters() {
     <tr>
       <td style="color:var(--gray-500);font-size:12px">${start+i+1}</td>
       <td class="td-name">${m.name}</td>
+      <td>${m.gender ? '<span class="badge '+(m.gender==='FEMALE'?'badge-amber':'badge-blue')+'">'+(m.gender==='FEMALE'?'F':'M')+'</span>' : '—'}</td>
       <td><span class="badge badge-blue">${m.zone||'—'}</span></td>
-      <td style="font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis">${m.branch||'—'}</td>
-      <td><span class="badge badge-gray">${m.skills||'—'}</span></td>
-      <td style="font-family:monospace;font-size:12px">${m.contact||'—'}</td>
+      <td style="font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.branch||'—'}</td>
+      <td><span class="badge badge-gray" style="font-size:10px">${(m.skills||'—').split(',')[0]}</span></td>
+      <td style="font-family:monospace;font-size:12px">${m.contact||m.phone1||'—'}</td>
       <td><span class="cohort-badge cohort-${m.cohort}">${m.cohort}</span></td>
       <td><strong>${m.trainees}</strong></td>
       <td>${yesnoBadge(m.agreement)}</td>
       <td>${yesnoBadge(m.mform)}</td>
+      <td>${yesnoBadge(m.gradFee)}</td>
       <td>
         <div class="row-actions">
           <button class="icon-btn icon-btn-view" onclick="viewRecord(${m.idx},'master')" title="View">
@@ -2356,14 +3565,17 @@ function renderTrainees() {
     <tr>
       <td style="color:var(--gray-500);font-size:12px">${start+i+1}</td>
       <td class="td-name">${r['NAME OF TRAINEE']||'—'}</td>
+      <td>${r['TRAINEE GENDER']||r['GENDER'] ? '<span class="badge '+(( r['TRAINEE GENDER']||r['GENDER'])==='FEMALE'?'badge-amber':'badge-blue')+'">'+(( r['TRAINEE GENDER']||r['GENDER'])==='FEMALE'?'F':'M')+'</span>' : '—'}</td>
       <td><span class="badge badge-blue">${r.ZONE||'—'}</span></td>
-      <td style="font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis">${r['BRANCH NAME']||'—'}</td>
-      <td><span class="badge badge-gray">${r.SKILLS||'—'}</span></td>
-      <td style="font-family:monospace;font-size:12px">${r['CONTACT OF TRAINEE']||'—'}</td>
-      <td style="font-size:12px">${r['NAME OF MASTER']||'—'}</td>
+      <td style="font-size:12px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['BRANCH NAME']||'—'}</td>
+      <td><span class="badge badge-gray" style="font-size:10px">${r.SKILLS||'—'}</span></td>
+      <td style="font-family:monospace;font-size:12px">${r['CONTACT OF TRAINEE']||r['PHONE NUMBER 1']||'—'}</td>
+      <td style="font-size:12px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['NAME OF MASTER']||'—'}</td>
       <td><span class="cohort-badge cohort-${r.COHORT}">${r.COHORT}</span></td>
+      <td style="font-size:11px">${r['LEVEL OF EDUCATION']||'—'}</td>
       <td>${yesnoBadge(r.PROSPECTUS)}</td>
       <td>${yesnoBadge(r.A_FORM)}</td>
+      <td>${yesnoBadge(r['EQUIPMENT RECEIVED'])}</td>
       <td>
         <div class="row-actions">
           <button class="icon-btn icon-btn-view" onclick="viewRecord(${DB.indexOf(r)},'trainee')" title="View">
