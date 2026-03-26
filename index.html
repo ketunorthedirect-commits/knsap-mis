@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KN SAP — Ketu North Skills & Apprenticeship Programme</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
 // ══════════════════════════════════════════════
 // MASTER / TRAINEE PAGE TAB SWITCHING
 // ══════════════════════════════════════════════
@@ -2771,7 +2772,7 @@ footer span { color: var(--orange-light); font-weight: 600; }
             </div>
             <div class="alert alert-info" style="margin-top:12px">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Currently running with embedded demo data. Connect your Google Sheet to enable live sync.
+              Enter your Google Sheet ID and API key above, then click Load Data. Credentials are saved automatically for future sessions.
             </div>
           </div>
         </div>
@@ -3956,9 +3957,50 @@ function tryAutoLoadSheets() {
   const id = localStorage.getItem('knsap_sheet_id');
   const key = localStorage.getItem('knsap_api_key');
   if (id && key) {
-    document.getElementById('gsheets-id').value = id;
-    document.getElementById('gsheets-key').value = key;
-    showToast('Saved credentials detected — click Load Data to reconnect');
+    const idEl = document.getElementById('gsheets-id');
+    const keyEl = document.getElementById('gsheets-key');
+    if (idEl) idEl.value = id;
+    if (keyEl) keyEl.value = key;
+    // Auto-connect silently on login
+    autoConnectSheets(id, key);
+  }
+}
+
+async function autoConnectSheets(id, key) {
+  try {
+    const range = encodeURIComponent('COHORTS!A1:Q2000');
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${range}?key=${key}`;
+    const res = await fetch(url);
+    if (!res.ok) { showToast('⚠️ Saved Sheets credentials invalid — re-enter in Admin'); return; }
+    const data = await res.json();
+    const rows = data.values || [];
+    if (rows.length < 2) { showToast('⚠️ Sheet connected but no data found'); return; }
+    const headers = rows[0];
+    const loaded = [];
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || r.length === 0) continue;
+      const obj = {};
+      headers.forEach((h, idx) => { obj[h] = r[idx] || ''; });
+      obj['COHORT'] = parseInt(obj['COHORT']) || 1;
+      obj['#'] = i;
+      loaded.push(obj);
+    }
+    if (loaded.length > 0) {
+      DB = loaded;
+      populateSkillFilters();
+      updateMasterRecordCount();
+      updateTraineeRecordCount();
+      logActivity('Auto-connected: loaded ' + loaded.length + ' live records from Google Sheets');
+      showToast('🔴 LIVE — ' + loaded.length + ' records loaded from Google Sheets');
+      const statusEl = document.getElementById('backup-status');
+      if (statusEl) {
+        statusEl.innerHTML = '<b>✅ Live Google Sheets connected.</b> ' + loaded.length + ' records. Last sync: ' + new Date().toLocaleTimeString();
+        statusEl.style.display = 'flex';
+      }
+    }
+  } catch(e) {
+    // Silent fail — fall back to embedded data
   }
 }
 
