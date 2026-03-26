@@ -1874,22 +1874,18 @@ footer span { color: var(--orange-light); font-weight: 600; }
     <div class="login-form">
       <div class="form-group" style="margin-bottom:14px">
         <label>Username</label>
-        <input type="text" id="login-user" placeholder="Enter username" value="admin">
+        <input type="text" id="login-user" placeholder="Enter username" autocomplete="username">
       </div>
       <div class="form-group" style="margin-bottom:14px">
         <label>Password / PIN</label>
-        <input type="password" id="login-pass" placeholder="Enter password" value="admin123">
+        <input type="password" id="login-pass" placeholder="Enter password" autocomplete="current-password">
       </div>
       <button class="btn btn-primary" style="width:100%;justify-content:center;padding:11px" onclick="doLogin()">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3"/></svg>
         Sign In
       </button>
       <div class="login-error" id="login-error">Invalid username or password.</div>
-      <div style="margin-top:14px;padding:10px;background:#f8f9fb;border-radius:8px;font-size:12px;color:#7a8899;text-align:center;">
-        <strong>Demo accounts:</strong><br>
-        admin / admin123 (Administrator)<br>
-        editor / edit123 (Editor)
-      </div>
+
     </div>
   </div>
 </div>
@@ -4005,8 +4001,7 @@ document.addEventListener('keydown', e => {
   if (e.key === '/' && e.target.tagName !== 'INPUT') { document.getElementById('global-search')?.focus(); e.preventDefault(); }
 });
 
-// ── Auto-login for demo ──
-// (user can press Enter on login)
+// ── Keyboard: Enter to sign in ──
 document.addEventListener('keydown', e => {
   if (e.key === 'Enter' && document.getElementById('login-page').style.display !== 'none') doLogin();
 });
