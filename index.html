@@ -1887,6 +1887,18 @@ footer span { color: var(--orange-light); font-weight: 600; }
       </button>
       <div class="login-error" id="login-error">Invalid username or password.</div>
 
+      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
+        <div style="flex:1;height:1px;background:var(--gray-200);"></div>
+        <span style="font-size:12px;color:var(--gray-500);white-space:nowrap;">or continue as</span>
+        <div style="flex:1;height:1px;background:var(--gray-200);"></div>
+      </div>
+
+      <button class="btn" style="width:100%;justify-content:center;padding:11px;margin-top:12px;background:var(--gray-50);border:1.5px solid var(--gray-200);color:var(--navy);font-weight:600;gap:8px;" onclick="viewGuestDashboard()">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        View Live Dashboard
+        <span style="font-size:10px;font-weight:500;background:var(--orange-pale);color:var(--orange);padding:2px 7px;border-radius:20px;margin-left:2px;">Guest</span>
+      </button>
+
     </div>
   </div>
 </div>
@@ -1961,6 +1973,25 @@ footer span { color: var(--orange-light); font-weight: 600; }
         Export CSV
       </button>
     </div>
+    <!-- Live Data panel — visible to ALL roles -->
+    <div class="sidebar-section" id="live-data-section">
+      <div class="sidebar-label">Live Data</div>
+      <div style="padding:10px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-sm);margin-bottom:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          <span id="live-dot" style="width:8px;height:8px;border-radius:50%;background:var(--gray-300);flex-shrink:0"></span>
+          <span id="live-label" style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px">Not connected</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <input type="text" id="sb-sheet-id" placeholder="Google Sheets ID" style="font-size:11px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:white;width:100%;box-sizing:border-box">
+          <input type="password" id="sb-api-key" placeholder="API Key (AIzaSy...)" style="font-size:11px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:white;width:100%;box-sizing:border-box">
+          <button onclick="sidebarConnect()" style="width:100%;padding:7px;background:var(--orange);color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">
+            🔄 Connect &amp; Load
+          </button>
+        </div>
+        <div id="live-last-sync" style="font-size:10px;color:var(--gray-500);margin-top:6px;display:none"></div>
+      </div>
+    </div>
+
     <div class="sidebar-section admin-only" id="admin-sidebar-section" style="display:none">
       <div class="sidebar-label">Administration</div>
       <button class="sidebar-link" onclick="showPage('admin')">
@@ -3171,6 +3202,23 @@ function doLogout() {
   location.reload();
 }
 
+function viewGuestDashboard() {
+  currentUser = {id:0, name:"Guest", username:"guest", role:"guest"};
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('top-nav').style.display='flex';
+  document.getElementById('app').style.display='flex';
+  document.getElementById('main-footer').style.display='block';
+  document.getElementById('nav-username').textContent = 'Guest';
+  document.getElementById('nav-avatar').textContent = 'G';
+  document.getElementById('nav-avatar').style.background = 'var(--gray-500)';
+  // Hide nav links except Dashboard for guests; hide admin-only elements
+  document.querySelectorAll('.nav-link').forEach(el => el.style.display='none');
+  const dashBtn = document.querySelector('.nav-link');
+  if (dashBtn) dashBtn.style.display='';
+  initApp();
+  logActivity('Guest viewed dashboard');
+}
+
 // ── Init ──
 function initApp() {
   populateSkillFilters();
@@ -3991,53 +4039,123 @@ async function testGSheetsConnection() {
 
 // Auto-load saved credentials on startup
 function tryAutoLoadSheets() {
-  const id = localStorage.getItem('knsap_sheet_id');
+  const id  = localStorage.getItem('knsap_sheet_id');
   const key = localStorage.getItem('knsap_api_key');
   if (id && key) {
-    const idEl = document.getElementById('gsheets-id');
+    // Pre-fill Admin panel inputs
+    const idEl  = document.getElementById('gsheets-id');
     const keyEl = document.getElementById('gsheets-key');
-    if (idEl) idEl.value = id;
+    if (idEl)  idEl.value  = id;
     if (keyEl) keyEl.value = key;
-    // Auto-connect silently on login
+    // Pre-fill sidebar inputs (visible to all roles)
+    const sbId  = document.getElementById('sb-sheet-id');
+    const sbKey = document.getElementById('sb-api-key');
+    if (sbId)  sbId.value  = id;
+    if (sbKey) sbKey.value = key;
+    // Auto-connect for ALL roles
     autoConnectSheets(id, key);
   }
 }
 
+// Called from the sidebar Connect button — works for admin AND editor
+function sidebarConnect() {
+  const id  = document.getElementById('sb-sheet-id').value.trim();
+  const key = document.getElementById('sb-api-key').value.trim();
+  if (!id || !key) { showToast('⚠️ Enter both Sheet ID and API Key'); return; }
+  // Persist so admin panel stays in sync too
+  localStorage.setItem('knsap_sheet_id', id);
+  localStorage.setItem('knsap_api_key', key);
+  const idEl  = document.getElementById('gsheets-id');
+  const keyEl = document.getElementById('gsheets-key');
+  if (idEl)  idEl.value  = id;
+  if (keyEl) keyEl.value = key;
+  showToast('Connecting…');
+  autoConnectSheets(id, key);
+}
+
 async function autoConnectSheets(id, key) {
+  // Show connecting state on sidebar dot
+  const dot   = document.getElementById('live-dot');
+  const label = document.getElementById('live-label');
+  const sync  = document.getElementById('live-last-sync');
+  if (dot)   dot.style.background   = '#f59e0b';   // amber = connecting
+  if (label) label.textContent      = 'Connecting…';
+  if (label) label.style.color      = '#92400e';
+
   try {
     const range = encodeURIComponent('COHORTS!A1:Q2000');
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${range}?key=${key}`;
     const res = await fetch(url);
-    if (!res.ok) { showToast('⚠️ Saved Sheets credentials invalid — re-enter in Admin'); return; }
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = err?.error?.message || 'Check Sheet ID and API Key';
+      showToast('❌ Sheets error: ' + msg);
+      if (dot)   dot.style.background = 'var(--red)';
+      if (label) { label.textContent = 'Error'; label.style.color = 'var(--red)'; }
+      return;
+    }
     const data = await res.json();
     const rows = data.values || [];
-    if (rows.length < 2) { showToast('⚠️ Sheet connected but no data found'); return; }
+    if (rows.length < 2) {
+      showToast('⚠️ Sheet connected but no data rows found — check the COHORTS sheet');
+      if (dot)   dot.style.background = '#f59e0b';
+      if (label) { label.textContent = 'No data'; label.style.color = '#92400e'; }
+      return;
+    }
     const headers = rows[0];
-    const loaded = [];
+    const loaded  = [];
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
       if (!r || r.length === 0) continue;
       const obj = {};
-      headers.forEach((h, idx) => { obj[h] = r[idx] || ''; });
+      headers.forEach((h, colIdx) => { obj[h] = r[colIdx] || ''; });
       obj['COHORT'] = parseInt(obj['COHORT']) || 1;
       obj['#'] = i;
       loaded.push(obj);
     }
-    if (loaded.length > 0) {
-      DB = loaded;
-      populateSkillFilters();
-      updateMasterRecordCount();
-      updateTraineeRecordCount();
-      logActivity('Auto-connected: loaded ' + loaded.length + ' live records from Google Sheets');
-      showToast('🔴 LIVE — ' + loaded.length + ' records loaded from Google Sheets');
-      const statusEl = document.getElementById('backup-status');
-      if (statusEl) {
-        statusEl.innerHTML = '<b>✅ Live Google Sheets connected.</b> ' + loaded.length + ' records. Last sync: ' + new Date().toLocaleTimeString();
-        statusEl.style.display = 'flex';
-      }
+    if (loaded.length === 0) {
+      showToast('⚠️ No records parsed from sheet');
+      return;
     }
+
+    // ── Update in-memory DB ──
+    DB = loaded;
+    populateSkillFilters();
+    updateMasterRecordCount();
+    updateTraineeRecordCount();
+
+    // ── Refresh whichever page is currently visible ──
+    const activePage = document.querySelector('.page.active');
+    if (activePage) {
+      const pid = activePage.id;
+      if (pid === 'page-dashboard')  updateDashboard();
+      if (pid === 'page-cohorts')    { currentPageCohorts=1;   renderCohorts(); }
+      if (pid === 'page-masters')    { currentPageMasters=1;   renderMasters(); }
+      if (pid === 'page-trainees')   { currentPageTrainees=1;  renderTrainees(); }
+    } else {
+      updateDashboard();  // safe fallback
+    }
+
+    // ── Update sidebar live indicator ──
+    const now = new Date().toLocaleTimeString();
+    if (dot)   dot.style.background   = '#16a34a';  // green
+    if (label) { label.textContent = 'LIVE — ' + loaded.length + ' records'; label.style.color = '#15803d'; }
+    if (sync)  { sync.textContent  = 'Last sync: ' + now; sync.style.display = 'block'; }
+
+    // ── Update admin backup-status panel ──
+    const statusEl = document.getElementById('backup-status');
+    if (statusEl) {
+      statusEl.innerHTML = '<b>✅ Live Google Sheets connected.</b> ' + loaded.length + ' records loaded. Last sync: ' + now;
+      statusEl.style.display = 'flex';
+    }
+
+    logActivity('Live sync: loaded ' + loaded.length + ' records from Google Sheets');
+    showToast('✅ LIVE — ' + loaded.length + ' records loaded from Google Sheets');
+
   } catch(e) {
-    // Silent fail — fall back to embedded data
+    showToast('❌ Connection failed: ' + (e.message || 'Network error'));
+    if (dot)   dot.style.background = 'var(--red)';
+    if (label) { label.textContent  = 'Failed'; label.style.color = 'var(--red)'; }
   }
 }
 
