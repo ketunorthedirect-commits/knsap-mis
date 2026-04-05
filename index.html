@@ -1887,18 +1887,6 @@ footer span { color: var(--orange-light); font-weight: 600; }
       </button>
       <div class="login-error" id="login-error">Invalid username or password.</div>
 
-      <div style="display:flex;align-items:center;gap:10px;margin-top:14px;">
-        <div style="flex:1;height:1px;background:var(--gray-200);"></div>
-        <span style="font-size:12px;color:var(--gray-500);white-space:nowrap;">or continue as</span>
-        <div style="flex:1;height:1px;background:var(--gray-200);"></div>
-      </div>
-
-      <button class="btn" style="width:100%;justify-content:center;padding:11px;margin-top:12px;background:var(--gray-50);border:1.5px solid var(--gray-200);color:var(--navy);font-weight:600;gap:8px;" onclick="viewGuestDashboard()">
-        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
-        View Live Dashboard
-        <span style="font-size:10px;font-weight:500;background:var(--orange-pale);color:var(--orange);padding:2px 7px;border-radius:20px;margin-left:2px;">Guest</span>
-      </button>
-
     </div>
   </div>
 </div>
@@ -1973,7 +1961,7 @@ footer span { color: var(--orange-light); font-weight: 600; }
         Export CSV
       </button>
     </div>
-    <!-- Live Data panel — visible to ALL roles -->
+    <!-- Live Data panel -->
     <div class="sidebar-section" id="live-data-section">
       <div class="sidebar-label">Live Data</div>
       <div style="padding:10px 12px;background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-sm);margin-bottom:6px">
@@ -1981,7 +1969,8 @@ footer span { color: var(--orange-light); font-weight: 600; }
           <span id="live-dot" style="width:8px;height:8px;border-radius:50%;background:var(--gray-300);flex-shrink:0"></span>
           <span id="live-label" style="font-size:11px;font-weight:700;color:var(--gray-500);text-transform:uppercase;letter-spacing:.5px">Not connected</span>
         </div>
-        <div style="display:flex;flex-direction:column;gap:6px">
+        <!-- Inputs & connect button — admin only -->
+        <div class="admin-only" id="sb-connect-block" style="display:none;flex-direction:column;gap:6px">
           <input type="text" id="sb-sheet-id" placeholder="Google Sheets ID" style="font-size:11px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:white;width:100%;box-sizing:border-box">
           <input type="password" id="sb-api-key" placeholder="API Key (AIzaSy...)" style="font-size:11px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:white;width:100%;box-sizing:border-box">
           <button onclick="sidebarConnect()" style="width:100%;padding:7px;background:var(--orange);color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">
@@ -2827,10 +2816,10 @@ footer span { color: var(--orange-light); font-weight: 600; }
     <div class="page" id="page-activity">
       <div class="page-header">
         <div>
-          <div class="page-title">Activity Log</div>
-          <div class="page-subtitle">All system actions and edits</div>
+          <div class="page-title">System Activity Log</div>
+          <div class="page-subtitle">Complete audit trail of all user actions &nbsp;•&nbsp; <span style="color:var(--orange);font-weight:600">Administrator only</span></div>
         </div>
-        <button class="btn btn-outline btn-sm" onclick="clearLogs()">Clear Log</button>
+        <button class="btn btn-outline btn-sm admin-only" style="display:none" onclick="clearLogs()">Clear Log</button>
       </div>
       <div class="page-content">
         <div class="table-container">
@@ -3191,7 +3180,10 @@ function doLogin() {
   document.getElementById('nav-username').textContent = user.name;
   document.getElementById('nav-avatar').textContent = user.name[0];
   if (user.role === 'admin') {
-    document.querySelectorAll('.admin-only').forEach(el => el.style.display='');
+    document.querySelectorAll('.admin-only').forEach(el => {
+      // Preserve flex layout for elements that need it
+      el.style.display = el.id === 'sb-connect-block' ? 'flex' : '';
+    });
   }
   initApp();
   logActivity(`${user.name} signed in`);
@@ -3202,25 +3194,41 @@ function doLogout() {
   location.reload();
 }
 
-function viewGuestDashboard() {
-  currentUser = {id:0, name:"Guest", username:"guest", role:"guest"};
-  document.getElementById('login-page').style.display='none';
-  document.getElementById('top-nav').style.display='flex';
-  document.getElementById('app').style.display='flex';
-  document.getElementById('main-footer').style.display='block';
-  document.getElementById('nav-username').textContent = 'Guest';
-  document.getElementById('nav-avatar').textContent = 'G';
-  document.getElementById('nav-avatar').style.background = 'var(--gray-500)';
-  // Hide nav links except Dashboard for guests; hide admin-only elements
-  document.querySelectorAll('.nav-link').forEach(el => el.style.display='none');
-  const dashBtn = document.querySelector('.nav-link');
-  if (dashBtn) dashBtn.style.display='';
-  initApp();
-  logActivity('Guest viewed dashboard');
-}
-
 // ── Init ──
 function initApp() {
+  // Restore previously-loaded sheet data so every role shares the same dataset
+  // without needing to re-fetch from Google Sheets each time.
+  const cached = sessionStorage.getItem('knsap_db');
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        DB = parsed;
+        DB.forEach(r => { if(SKILL_NORM[r.SKILLS]) r.SKILLS = SKILL_NORM[r.SKILLS]; });
+        populateSkillFilters();
+        updateMasterRecordCount();
+        updateTraineeRecordCount();
+        // Show live indicator as cached
+        const dot   = document.getElementById('live-dot');
+        const label = document.getElementById('live-label');
+        const sync  = document.getElementById('live-last-sync');
+        if (dot)   dot.style.background = '#16a34a';
+        if (label) { label.textContent = 'LIVE — ' + DB.length + ' records'; label.style.color = '#15803d'; }
+        if (sync)  { sync.style.display = 'block'; }
+        showPage('dashboard');
+        renderUsersAdmin();
+        // Still pre-fill credentials so admin panel shows them, but don't re-fetch
+        const id  = localStorage.getItem('knsap_sheet_id');
+        const key = localStorage.getItem('knsap_api_key');
+        if (id && key) {
+          const prefill = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val; };
+          prefill('gsheets-id', id); prefill('gsheets-key', key);
+          prefill('sb-sheet-id', id); prefill('sb-api-key', key);
+        }
+        return;
+      }
+    } catch(e) { /* fall through to normal load */ }
+  }
   populateSkillFilters();
   showPage('dashboard');
   renderUsersAdmin();
@@ -3238,6 +3246,21 @@ function populateSkillFilters() {
 
 // ── Page Navigation ──
 function showPage(name) {
+  // Guard: activity log is admin-only
+  if (name === 'activity' && (!currentUser || currentUser.role !== 'admin')) {
+    showToast('⛔ Activity log is restricted to Administrator');
+    return;
+  }
+  // Guard: admin panel is admin-only
+  if (name === 'admin' && (!currentUser || currentUser.role !== 'admin')) {
+    showToast('⛔ Admin panel is restricted to Administrator');
+    return;
+  }
+  // Guard: guests may only view dashboard
+  if (currentUser && currentUser.role === 'guest' && name !== 'dashboard') {
+    showToast('👁️ Guest view — dashboard only');
+    return;
+  }
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.nav-link, .sidebar-link').forEach(l=>l.classList.remove('active'));
   const page = document.getElementById('page-'+name);
@@ -3249,6 +3272,7 @@ function showPage(name) {
   if (name === 'trainees') { currentPageTrainees=1; renderTrainees(); updateTraineeRecordCount(); }
   if (name === 'admin') renderUsersAdmin();
   if (name === 'activity') renderActivityLog();
+  logActivity(`Viewed page: ${name}`);
 }
 
 // ── Dashboard ──
@@ -3904,26 +3928,48 @@ function deleteUser(id) {
 
 // ── Activity Log ──
 function logActivity(msg) {
-  activityLog.unshift({ msg, time: new Date().toLocaleString() });
-  if (activityLog.length > 200) activityLog.pop();
+  const entry = {
+    msg,
+    time: new Date().toLocaleString(),
+    actor: currentUser ? currentUser.name : 'System',
+    role:  currentUser ? currentUser.role  : 'system'
+  };
+  activityLog.unshift(entry);
+  if (activityLog.length > 500) activityLog.pop();
 }
 
 function renderActivityLog() {
   const el = document.getElementById('activity-log-list');
   if (!el) return;
+  // Guard: only admin may view
+  if (!currentUser || currentUser.role !== 'admin') {
+    el.innerHTML = '<div class="empty-state"><h3>Access restricted to Administrator</h3></div>';
+    return;
+  }
   if (!activityLog.length) { el.innerHTML='<div class="empty-state"><h3>No activity yet</h3></div>'; return; }
-  el.innerHTML = activityLog.map(a=>`
+  el.innerHTML = activityLog.map(a => {
+    const roleColor = a.role === 'admin' ? 'var(--orange)' : a.role === 'guest' ? 'var(--gray-500)' : 'var(--navy)';
+    return `
     <div class="activity-item">
       <div class="activity-dot"></div>
-      <div>
+      <div style="flex:1">
         <div class="activity-text">${a.msg}</div>
-        <div class="activity-time">${a.time}</div>
+        <div style="display:flex;gap:10px;margin-top:3px;align-items:center">
+          <span style="font-size:11px;color:${roleColor};font-weight:600">${a.actor}</span>
+          <span style="font-size:10px;color:var(--gray-400)">${a.role}</span>
+          <span class="activity-time" style="margin-top:0">${a.time}</span>
+        </div>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
-function clearLogs() { activityLog=[]; renderActivityLog(); showToast('Log cleared'); }
+function clearLogs() {
+  if (!currentUser || currentUser.role !== 'admin') { showToast('⛔ Admin only'); return; }
+  activityLog = [];
+  renderActivityLog();
+  showToast('Log cleared');
+}
 
 // ── Global Search ──
 let searchTimeout;
@@ -4037,8 +4083,9 @@ async function testGSheetsConnection() {
   }
 }
 
-// Auto-load saved credentials on startup
+// Auto-load saved credentials on startup — admin only
 function tryAutoLoadSheets() {
+  if (!currentUser || currentUser.role !== 'admin') return;
   const id  = localStorage.getItem('knsap_sheet_id');
   const key = localStorage.getItem('knsap_api_key');
   if (id && key) {
@@ -4047,18 +4094,18 @@ function tryAutoLoadSheets() {
     const keyEl = document.getElementById('gsheets-key');
     if (idEl)  idEl.value  = id;
     if (keyEl) keyEl.value = key;
-    // Pre-fill sidebar inputs (visible to all roles)
+    // Pre-fill sidebar inputs
     const sbId  = document.getElementById('sb-sheet-id');
     const sbKey = document.getElementById('sb-api-key');
     if (sbId)  sbId.value  = id;
     if (sbKey) sbKey.value = key;
-    // Auto-connect for ALL roles
     autoConnectSheets(id, key);
   }
 }
 
-// Called from the sidebar Connect button — works for admin AND editor
+// Called from the sidebar Connect button — admin only
 function sidebarConnect() {
+  if (!currentUser || currentUser.role !== 'admin') { showToast('⛔ Only the Administrator can load sheet data'); return; }
   const id  = document.getElementById('sb-sheet-id').value.trim();
   const key = document.getElementById('sb-api-key').value.trim();
   if (!id || !key) { showToast('⚠️ Enter both Sheet ID and API Key'); return; }
@@ -4120,6 +4167,8 @@ async function autoConnectSheets(id, key) {
 
     // ── Update in-memory DB ──
     DB = loaded;
+    // Persist loaded data in sessionStorage so other roles don't need to re-fetch
+    try { sessionStorage.setItem('knsap_db', JSON.stringify(loaded)); } catch(e) { /* quota exceeded, skip */ }
     populateSkillFilters();
     updateMasterRecordCount();
     updateTraineeRecordCount();
@@ -4199,6 +4248,37 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') { document.querySelectorAll('.modal-overlay.open').forEach(m=>m.classList.remove('open')); }
   if (e.key === '/' && e.target.tagName !== 'INPUT') { document.getElementById('global-search')?.focus(); e.preventDefault(); }
 });
+
+// ── Guest URL mode (?guest=1) ──
+// Share this URL for a read-only public dashboard: index.html?guest=1
+(function initGuestMode() {
+  if (new URLSearchParams(window.location.search).get('guest') !== '1') return;
+  currentUser = { id: 0, name: 'Guest', username: 'guest', role: 'guest' };
+  // Hide login, show app
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('top-nav').style.display    = 'flex';
+  document.getElementById('app').style.display        = 'flex';
+  document.getElementById('main-footer').style.display = 'block';
+  // Set avatar
+  document.getElementById('nav-username').textContent = 'Guest';
+  const av = document.getElementById('nav-avatar');
+  av.textContent = 'G';
+  av.style.background = 'var(--gray-500)';
+  // Hide all nav links except Dashboard; hide admin-only elements
+  document.querySelectorAll('.nav-link').forEach(el => el.style.display = 'none');
+  const dashBtn = document.querySelector('.nav-link[onclick="showPage(\'dashboard\')"]');
+  if (dashBtn) dashBtn.style.display = '';
+  // Add read-only badge to top nav
+  const navRight = document.getElementById('nav-right') || document.querySelector('.nav-right');
+  if (navRight) {
+    const badge = document.createElement('span');
+    badge.textContent = '👁️ Read-Only';
+    badge.style.cssText = 'font-size:11px;font-weight:700;background:var(--orange-pale);color:var(--orange);padding:3px 10px;border-radius:20px;margin-right:8px';
+    navRight.prepend(badge);
+  }
+  logActivity('Guest accessed dashboard via public URL');
+  initApp();
+})();
 
 // ── Keyboard: Enter to sign in ──
 document.addEventListener('keydown', e => {
