@@ -2016,6 +2016,11 @@ footer span { color: var(--orange-light); font-weight: 600; }
             <option value="PENYI">Penyi</option>
             <option value="WETA">Weta</option>
           </select>
+          <select class="filter-select" id="dash-filter-gender" onchange="updateDashboard()">
+            <option value="">All Genders</option>
+            <option value="MALE">Male</option>
+            <option value="FEMALE">Female</option>
+          </select>
           <button class="btn btn-primary btn-sm" onclick="printDashboard()">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             Print
@@ -2788,11 +2793,19 @@ footer span { color: var(--orange-light); font-weight: 600; }
               </div>
               <div class="form-group full">
                 <button class="btn btn-primary" onclick="testGSheetsConnection()">🔄 Load Data from Google Sheets</button>
+                <button class="btn btn-outline" style="margin-left:10px" onclick="copyShareableLink()" title="Copy a URL that pre-seeds these credentials on any device">🔗 Copy Shareable Link</button>
               </div>
             </div>
             <div class="alert alert-info" style="margin-top:12px">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Enter your Google Sheet ID and API key above, then click Load Data. Credentials are saved automatically for future sessions.
+              Enter your Google Sheet ID and API key above, then click Load Data. Credentials are saved automatically for future sessions on this device.
+            </div>
+            <div class="chart-card" style="margin-top:16px;background:var(--gray-50);border:1px solid var(--gray-200)">
+              <div class="chart-title" style="font-size:13px">📱 Use on Other Devices</div>
+              <div class="chart-subtitle" style="margin-bottom:12px">The Sheet ID is saved in this browser only. To use the same data on another device or browser, click <strong>🔗 Copy Shareable Link</strong> above — then open that link on the other device. The credentials will be saved automatically when the link is opened.</div>
+              <div id="stored-creds-display" style="font-size:12px;color:var(--gray-500)">
+                <!-- populated by renderStoredCreds() -->
+              </div>
             </div>
           </div>
         </div>
@@ -3155,10 +3168,26 @@ let editTarget = null;
 let currentPageCohorts = 1, currentPageMasters = 1, currentPageTrainees = 1;
 const PAGE_SIZE = 25;
 let activityLog = [];
-let users = [
-  {id:1, name:"Administrator", username:"admin", password:"admin123", role:"admin"},
-  {id:2, name:"Editor", username:"editor", password:"edit123", role:"editor"}
-];
+let users = (function() {
+  try {
+    const saved = localStorage.getItem('knsap_users');
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+  } catch(e) {}
+  // Defaults — only used on first run; immediately persist so they survive reloads
+  const defaults = [
+    {id:1, name:"Administrator", username:"admin", password:"admin123", role:"admin"},
+    {id:2, name:"Editor", username:"editor", password:"edit123", role:"editor"}
+  ];
+  try { localStorage.setItem('knsap_users', JSON.stringify(defaults)); } catch(e) {}
+  return defaults;
+})();
+
+function persistUsers() {
+  try { localStorage.setItem('knsap_users', JSON.stringify(users)); } catch(e) {}
+}
 let charts = {};
 let sortState = {};
 
@@ -3279,9 +3308,15 @@ function showPage(name) {
 function getFilteredData() {
   let data = DB;
   const cohort = document.getElementById('dash-filter-cohort')?.value;
-  const zone = document.getElementById('dash-filter-zone')?.value;
+  const zone   = document.getElementById('dash-filter-zone')?.value;
+  const gender = document.getElementById('dash-filter-gender')?.value;
   if (cohort) data = data.filter(r => String(r.COHORT) === cohort);
-  if (zone) data = data.filter(r => r.ZONE === zone);
+  if (zone)   data = data.filter(r => r.ZONE === zone);
+  if (gender) data = data.filter(r => {
+    // Check both TRAINEE GENDER and GENDER fields, case-insensitive
+    const tg = (r['TRAINEE GENDER'] || r['GENDER'] || '').toUpperCase().trim();
+    return tg === gender;
+  });
   return data;
 }
 
@@ -3297,6 +3332,12 @@ function updateDashboard() {
   const prosPaid = data.filter(r=>['YES','PAID'].includes(r.PROSPECTUS)).length;
   const aFormDone = data.filter(r=>['YES','PAID','SUBMITTED'].includes(r.A_FORM)).length;
 
+  // Gender breakdown
+  const getGender = r => (r['TRAINEE GENDER'] || r['GENDER'] || '').toUpperCase().trim();
+  const males   = data.filter(r => getGender(r) === 'MALE').length;
+  const females = data.filter(r => getGender(r) === 'FEMALE').length;
+  const unknownG = total - males - females;
+
   const skillCounts = {};
   const zoneCounts = {};
   data.forEach(r => {
@@ -3306,12 +3347,38 @@ function updateDashboard() {
 
   const topSkills = Object.entries(skillCounts).sort((a,b)=>b[1]-a[1]).slice(0,10);
 
+  // Per-zone breakdown rows (gender-aware)
+  const allZones = ['DZODZE','WETA','AFIFE','PENYI'];
+  const zoneRows = allZones.map(z => {
+    const zd = data.filter(r => r.ZONE === z);
+    const zm = zd.filter(r => getGender(r) === 'MALE').length;
+    const zf = zd.filter(r => getGender(r) === 'FEMALE').length;
+    const pct = total > 0 ? Math.round(zd.length / total * 100) : 0;
+    return `<tr>
+      <td style="font-weight:600;color:var(--navy)">${z}</td>
+      <td style="text-align:center">${zd.length}</td>
+      <td style="text-align:center;color:#2563eb">${zm}</td>
+      <td style="text-align:center;color:#db2777">${zf}</td>
+      <td style="text-align:center">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="flex:1;height:6px;background:var(--gray-100);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${pct}%;background:var(--orange);border-radius:3px"></div>
+          </div>
+          <span style="font-size:11px;color:var(--gray-500);min-width:28px">${pct}%</span>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  const selectedGender = document.getElementById('dash-filter-gender')?.value;
+  const genderLabel = selectedGender ? ` — ${selectedGender.charAt(0)+selectedGender.slice(1).toLowerCase()} only` : '';
+
   const html = `
     <div class="stats-grid">
       <div class="stat-card blue">
         <div class="stat-icon blue"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
         <div class="stat-value">${total.toLocaleString()}</div>
-        <div class="stat-label">Total Records</div>
+        <div class="stat-label">Total Records${genderLabel}</div>
       </div>
       <div class="stat-card orange">
         <div class="stat-icon orange"><svg width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
@@ -3334,12 +3401,12 @@ function updateDashboard() {
       <div class="cohort-box c1" data-num="1">
         <div class="num">${c1}</div>
         <div class="lbl">Cohort 1 Records</div>
-        <div class="sublbl">${Math.round(c1/total*100)}% of total programme</div>
+        <div class="sublbl">${total>0?Math.round(c1/total*100):0}% of total programme</div>
       </div>
       <div class="cohort-box c2" data-num="2">
         <div class="num">${c2}</div>
         <div class="lbl">Cohort 2 Records</div>
-        <div class="sublbl">${Math.round(c2/total*100)}% of total programme</div>
+        <div class="sublbl">${total>0?Math.round(c2/total*100):0}% of total programme</div>
       </div>
     </div>
 
@@ -3355,35 +3422,70 @@ function updateDashboard() {
         <div class="chart-wrap"><canvas id="chart-zones"></canvas></div>
       </div>
       <div class="chart-card wide">
-        <div class="chart-title">Payment & MOA Status Analysis</div>
+        <div class="chart-title">Payment &amp; MOA Status Analysis</div>
         <div class="chart-subtitle">Compliance tracking across all records</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:20px;align-items:center">
           <div>
             <div style="font-size:12px;color:var(--gray-500);margin-bottom:6px;font-weight:600;text-transform:uppercase">Agreement Fee</div>
             <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--navy-dark)">${agrPaid}</div>
-            <div style="font-size:12px;color:var(--green);margin:4px 0">${Math.round(agrPaid/total*100)}% paid</div>
-            <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(agrPaid/total*100)}%"></div></div>
+            <div style="font-size:12px;color:var(--green);margin:4px 0">${total>0?Math.round(agrPaid/total*100):0}% paid</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${total>0?Math.round(agrPaid/total*100):0}%"></div></div>
           </div>
           <div>
             <div style="font-size:12px;color:var(--gray-500);margin-bottom:6px;font-weight:600;text-transform:uppercase">Master MOA</div>
             <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--navy-dark)">${moaDone}</div>
-            <div style="font-size:12px;color:var(--green);margin:4px 0">${Math.round(moaDone/total*100)}% done</div>
-            <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(moaDone/total*100)}%"></div></div>
+            <div style="font-size:12px;color:var(--green);margin:4px 0">${total>0?Math.round(moaDone/total*100):0}% done</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${total>0?Math.round(moaDone/total*100):0}%"></div></div>
           </div>
           <div>
             <div style="font-size:12px;color:var(--gray-500);margin-bottom:6px;font-weight:600;text-transform:uppercase">Prospectus Fee</div>
             <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--navy-dark)">${prosPaid}</div>
-            <div style="font-size:12px;color:var(--green);margin:4px 0">${Math.round(prosPaid/total*100)}% paid</div>
-            <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(prosPaid/total*100)}%"></div></div>
+            <div style="font-size:12px;color:var(--green);margin:4px 0">${total>0?Math.round(prosPaid/total*100):0}% paid</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${total>0?Math.round(prosPaid/total*100):0}%"></div></div>
           </div>
           <div>
             <div style="font-size:12px;color:var(--gray-500);margin-bottom:6px;font-weight:600;text-transform:uppercase">Trainee A.Form</div>
             <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--navy-dark)">${aFormDone}</div>
-            <div style="font-size:12px;color:var(--green);margin:4px 0">${Math.round(aFormDone/total*100)}% done</div>
-            <div class="progress-bar"><div class="progress-fill" style="width:${Math.round(aFormDone/total*100)}%"></div></div>
+            <div style="font-size:12px;color:var(--green);margin:4px 0">${total>0?Math.round(aFormDone/total*100):0}% done</div>
+            <div class="progress-bar"><div class="progress-fill" style="width:${total>0?Math.round(aFormDone/total*100):0}%"></div></div>
           </div>
         </div>
       </div>
+
+      <div class="chart-card">
+        <div class="chart-title">Gender Split</div>
+        <div class="chart-subtitle">Male vs Female across filtered records</div>
+        <div class="chart-wrap"><canvas id="chart-gender"></canvas></div>
+      </div>
+
+      <div class="chart-card wide">
+        <div class="chart-title">All Zones Breakdown</div>
+        <div class="chart-subtitle">Records per zone with gender split${genderLabel}</div>
+        <div style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead>
+              <tr style="border-bottom:2px solid var(--gray-200)">
+                <th style="text-align:left;padding:10px 12px;color:var(--gray-500);font-weight:600;text-transform:uppercase;font-size:11px">Zone</th>
+                <th style="text-align:center;padding:10px 12px;color:var(--gray-500);font-weight:600;text-transform:uppercase;font-size:11px">Total</th>
+                <th style="text-align:center;padding:10px 12px;color:#2563eb;font-weight:600;text-transform:uppercase;font-size:11px">♂ Male</th>
+                <th style="text-align:center;padding:10px 12px;color:#db2777;font-weight:600;text-transform:uppercase;font-size:11px">♀ Female</th>
+                <th style="text-align:center;padding:10px 12px;color:var(--gray-500);font-weight:600;text-transform:uppercase;font-size:11px">Share</th>
+              </tr>
+            </thead>
+            <tbody style="divide-y:var(--gray-100)">
+              ${zoneRows}
+              <tr style="border-top:2px solid var(--gray-200);background:var(--gray-50)">
+                <td style="padding:10px 12px;font-weight:700;color:var(--navy)">TOTAL</td>
+                <td style="text-align:center;padding:10px 12px;font-weight:700">${total}</td>
+                <td style="text-align:center;padding:10px 12px;font-weight:700;color:#2563eb">${males}</td>
+                <td style="text-align:center;padding:10px 12px;font-weight:700;color:#db2777">${females}</td>
+                <td style="text-align:center;padding:10px 12px;font-weight:700">100%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <div class="chart-card">
         <div class="chart-title">Cohort Comparison</div>
         <div class="chart-subtitle">Records per cohort per zone</div>
@@ -3429,6 +3531,22 @@ function updateDashboard() {
       datasets: [{
         data: zones.map(([,n])=>n),
         backgroundColor: [ORANGE, NAVY, '#f97316', '#3b82f6'],
+        borderWidth: 3,
+        borderColor: '#fff',
+        hoverBorderWidth: 4
+      }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom',labels:{font:{size:12},padding:12}}} }
+  });
+
+  // Gender doughnut
+  charts.gender = new Chart(document.getElementById('chart-gender'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Male','Female', unknownG > 0 ? 'Unknown' : null].filter(Boolean),
+      datasets: [{
+        data: [males, females, unknownG > 0 ? unknownG : null].filter(v => v !== null),
+        backgroundColor: ['#2563eb','#db2777','#9ca3af'],
         borderWidth: 3,
         borderColor: '#fff',
         hoverBorderWidth: 4
@@ -3902,6 +4020,13 @@ function saveUser() {
     u.username = username;
     u.role     = role;
     if (password) u.password = password; // only update password if a new one was entered
+    persistUsers();
+    // If editing self, refresh the nav display immediately
+    if (currentUser && currentUser.id === id) {
+      currentUser = u; // keep reference in sync
+      document.getElementById('nav-username').textContent = u.name;
+      document.getElementById('nav-avatar').textContent   = u.name[0];
+    }
     logActivity('Edited user: ' + username);
     showToast('✅ User updated successfully');
   } else {
@@ -3909,7 +4034,9 @@ function saveUser() {
     if (users.find(x => x.username === username)) {
       showToast('⚠️ Username already exists — choose another'); return;
     }
-    users.push({ id: Date.now(), name, username, password, role });
+    const newUser = { id: Date.now(), name, username, password, role };
+    users.push(newUser);
+    persistUsers();
     logActivity('Created user: ' + username);
     showToast('✅ User created successfully');
   }
@@ -3921,6 +4048,7 @@ function saveUser() {
 function deleteUser(id) {
   if (id === currentUser.id) { showToast("Can't delete yourself"); return; }
   users = users.filter(u=>u.id!==id);
+  persistUsers();
   logActivity(`Deleted user ID: ${id}`);
   renderUsersAdmin();
   showToast('User deleted');
@@ -4040,6 +4168,20 @@ function importJSON(e) {
     } catch { showToast('Invalid JSON file'); }
   };
   reader.readAsText(file);
+}
+
+function copyShareableLink() {
+  const id  = document.getElementById('gsheets-id').value.trim() || localStorage.getItem('knsap_sheet_id') || '';
+  const key = document.getElementById('gsheets-key').value.trim() || localStorage.getItem('knsap_api_key') || '';
+  if (!id || !key) { showToast('⚠️ Enter Sheet ID and API Key first'); return; }
+  const base = window.location.href.split('#')[0].split('?')[0];
+  const link = `${base}#sid=${encodeURIComponent(id)}&key=${encodeURIComponent(key)}`;
+  navigator.clipboard.writeText(link).then(() => {
+    showToast('✅ Shareable link copied! Open it on any device to pre-load credentials.');
+  }).catch(() => {
+    // Fallback for environments without clipboard API
+    prompt('Copy this link to share credentials across devices:', link);
+  });
 }
 
 async function testGSheetsConnection() {
@@ -4233,6 +4375,25 @@ function switchTab(name) {
   if (activeBtn) activeBtn.classList.add('active');
   const activeTab = document.getElementById('tab-' + name);
   if (activeTab) activeTab.classList.add('active');
+  if (name === 'settings') renderStoredCreds();
+}
+
+function renderStoredCreds() {
+  const el = document.getElementById('stored-creds-display');
+  if (!el) return;
+  const sid = localStorage.getItem('knsap_sheet_id');
+  const key = localStorage.getItem('knsap_api_key');
+  if (sid) {
+    // Pre-fill the inputs if they're empty
+    const idEl = document.getElementById('gsheets-id');
+    const keyEl = document.getElementById('gsheets-key');
+    if (idEl && !idEl.value) idEl.value = sid;
+    if (keyEl && !keyEl.value && key) keyEl.value = key;
+    el.innerHTML = `<span style="color:var(--green);font-weight:600">✅ Credentials stored on this device.</span>
+      Sheet ID: <code style="background:var(--gray-100);padding:2px 6px;border-radius:4px;font-size:11px">${sid.slice(0,18)}…</code>`;
+  } else {
+    el.innerHTML = `<span style="color:var(--orange);font-weight:600">⚠️ No credentials stored on this device.</span> Enter the Sheet ID and API Key above, then click Load Data.`;
+  }
 }
 
 // ── Toast ──
@@ -4278,6 +4439,21 @@ document.addEventListener('keydown', e => {
   }
   logActivity('Guest accessed dashboard via public URL');
   initApp();
+})();
+
+// ── Cross-device credential seeding via URL hash ──
+// Admin can share: app.html#sid=SHEET_ID&key=API_KEY
+// On any device that opens this URL, credentials are saved to localStorage automatically.
+(function seedCredentialsFromHash() {
+  const hash = window.location.hash.slice(1);
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  const sid = params.get('sid');
+  const key = params.get('key');
+  if (sid) localStorage.setItem('knsap_sheet_id', sid);
+  if (key) localStorage.setItem('knsap_api_key', key);
+  // Clean the hash from URL so credentials aren't exposed in browser history
+  if (sid || key) history.replaceState(null, '', window.location.pathname + window.location.search);
 })();
 
 // ── Keyboard: Enter to sign in ──
