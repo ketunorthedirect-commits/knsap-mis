@@ -3262,7 +3262,24 @@ async function initApp() {
   }
 }
 
-function populateSkillFilters() {
+function getGenderFromRecord(r) {
+  // Try every field name variant the sheet might have used
+  const raw = (
+    r['TRAINEE GENDER'] ||
+    r['GENDER'] ||
+    r['Trainee Gender'] ||
+    r['Gender'] ||
+    r['gender'] ||
+    r['trainee gender'] ||
+    r['SEX'] ||
+    r['Sex'] ||
+    r['sex'] ||
+    ''
+  ).toUpperCase().trim();
+  if (raw === 'M') return 'MALE';
+  if (raw === 'F') return 'FEMALE';
+  return raw;
+}
   const skills = [...new Set(DB.map(r=>r.SKILLS).filter(Boolean))].sort();
   ['f-skill','f-master-skill','f-trainee-skill'].forEach(id => {
     const sel = document.getElementById(id);
@@ -3310,11 +3327,7 @@ function getFilteredData() {
   const gender = document.getElementById('dash-filter-gender')?.value;
   if (cohort) data = data.filter(r => String(r.COHORT) === cohort);
   if (zone)   data = data.filter(r => r.ZONE === zone);
-  if (gender) data = data.filter(r => {
-    // Check both TRAINEE GENDER and GENDER fields, case-insensitive
-    const tg = (r['TRAINEE GENDER'] || r['GENDER'] || '').toUpperCase().trim();
-    return tg === gender;
-  });
+  if (gender) data = data.filter(r => getGenderFromRecord(r) === gender);
   return data;
 }
 
@@ -3331,9 +3344,8 @@ function updateDashboard() {
   const aFormDone = data.filter(r=>['YES','PAID','SUBMITTED'].includes(r.A_FORM)).length;
 
   // Gender breakdown
-  const getGender = r => (r['TRAINEE GENDER'] || r['GENDER'] || '').toUpperCase().trim();
-  const males   = data.filter(r => getGender(r) === 'MALE').length;
-  const females = data.filter(r => getGender(r) === 'FEMALE').length;
+  const males   = data.filter(r => getGenderFromRecord(r) === 'MALE').length;
+  const females = data.filter(r => getGenderFromRecord(r) === 'FEMALE').length;
   const unknownG = total - males - females;
 
   const skillCounts = {};
@@ -3349,8 +3361,8 @@ function updateDashboard() {
   const allZones = ['DZODZE','WETA','AFIFE','PENYI'];
   const zoneRows = allZones.map(z => {
     const zd = data.filter(r => r.ZONE === z);
-    const zm = zd.filter(r => getGender(r) === 'MALE').length;
-    const zf = zd.filter(r => getGender(r) === 'FEMALE').length;
+    const zm = zd.filter(r => getGenderFromRecord(r) === 'MALE').length;
+    const zf = zd.filter(r => getGenderFromRecord(r) === 'FEMALE').length;
     const pct = total > 0 ? Math.round(zd.length / total * 100) : 0;
     return `<tr>
       <td style="font-weight:600;color:var(--navy)">${z}</td>
@@ -4237,7 +4249,7 @@ async function autoConnectSheets(id, key) {
   if (label) { label.textContent = 'Fetching…'; label.style.color = '#92400e'; }
 
   try {
-    const range = encodeURIComponent('COHORTS!A1:Q2000');
+    const range = encodeURIComponent('COHORTS!A1:Z2000');
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${range}?key=${key}`;
     const res = await fetch(url);
     if (!res.ok) {
@@ -4258,13 +4270,37 @@ async function autoConnectSheets(id, key) {
     }
     const headers = rows[0];
     const loaded  = [];
+
+    // Build a normalised header map: strip whitespace, uppercase, map known variants
+    // This handles sheets where the column is named GENDER, Trainee Gender, TRAINEE_GENDER, etc.
+    const GENDER_VARIANTS = ['trainee gender','gender','trainee_gender','traineegender','sex','trainee sex'];
+    const headerMap = {}; // normalised → original index
+    headers.forEach((h, i) => {
+      headerMap[h.trim().toLowerCase()] = i;
+    });
+    // Find the best gender column index
+    let genderColIdx = -1;
+    for (const v of GENDER_VARIANTS) {
+      if (headerMap[v] !== undefined) { genderColIdx = headerMap[v]; break; }
+    }
+
     for (let i = 1; i < rows.length; i++) {
       const r = rows[i];
       if (!r || r.length === 0) continue;
       const obj = {};
-      headers.forEach((h, colIdx) => { obj[h] = r[colIdx] || ''; });
+      headers.forEach((h, colIdx) => { obj[h.trim()] = (r[colIdx] || '').trim(); });
       obj['COHORT'] = parseInt(obj['COHORT']) || 1;
       obj['#'] = i;
+      // Normalise gender into a canonical field regardless of sheet column name
+      if (genderColIdx >= 0) {
+        const raw = (r[genderColIdx] || '').trim().toUpperCase();
+        // Accept M/F shorthand as well as full words
+        let g = '';
+        if (raw === 'MALE'   || raw === 'M') g = 'MALE';
+        if (raw === 'FEMALE' || raw === 'F') g = 'FEMALE';
+        obj['TRAINEE GENDER'] = g || raw;
+        obj['GENDER']         = g || raw;
+      }
       loaded.push(obj);
     }
     if (loaded.length === 0) {
