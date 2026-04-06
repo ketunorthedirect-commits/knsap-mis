@@ -1974,7 +1974,10 @@ footer span { color: var(--orange-light); font-weight: 600; }
           <input type="text" id="sb-sheet-id" placeholder="Google Sheets ID" style="font-size:11px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:white;width:100%;box-sizing:border-box">
           <input type="password" id="sb-api-key" placeholder="API Key (AIzaSy...)" style="font-size:11px;padding:6px 8px;border:1px solid var(--gray-200);border-radius:6px;background:white;width:100%;box-sizing:border-box">
           <button onclick="sidebarConnect()" style="width:100%;padding:7px;background:var(--orange);color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">
-            🔄 Connect &amp; Load
+            🔗 Connect &amp; Load
+          </button>
+          <button onclick="refreshFromSheet()" style="width:100%;padding:7px;background:var(--navy);color:white;border:none;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit">
+            🔄 Refresh from Sheet
           </button>
         </div>
         <div id="live-last-sync" style="font-size:10px;color:var(--gray-500);margin-top:6px;display:none"></div>
@@ -2021,6 +2024,10 @@ footer span { color: var(--orange-light); font-weight: 600; }
             <option value="MALE">Male</option>
             <option value="FEMALE">Female</option>
           </select>
+          <button class="btn btn-primary btn-sm admin-only" style="display:none" onclick="refreshFromSheet()" title="Fetch latest data from Google Sheets">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+            Refresh
+          </button>
           <button class="btn btn-primary btn-sm" onclick="printDashboard()">
             <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
             Print
@@ -2792,17 +2799,20 @@ footer span { color: var(--orange-light); font-weight: 600; }
                 <input type="password" placeholder="AIzaSy..." id="gsheets-key">
               </div>
               <div class="form-group full">
-                <button class="btn btn-primary" onclick="testGSheetsConnection()">🔄 Load Data from Google Sheets</button>
-                <button class="btn btn-outline" style="margin-left:10px" onclick="copyShareableLink()" title="Copy a URL that pre-seeds these credentials on any device">🔗 Copy Shareable Link</button>
+                <button class="btn btn-primary" onclick="testGSheetsConnection()">🔗 Connect &amp; Load Data</button>
+                <button class="btn btn-outline" style="margin-left:10px" onclick="refreshFromSheet()">🔄 Refresh from Sheet</button>
+                <button class="btn btn-outline" style="margin-left:10px" onclick="copyShareableLink()" title="Copy a URL that pre-seeds these credentials on any device">📋 Copy Shareable Link</button>
               </div>
             </div>
             <div class="alert alert-info" style="margin-top:12px">
               <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Enter your Google Sheet ID and API key above, then click Load Data. Credentials are saved automatically for future sessions on this device.
+              Enter your Google Sheet ID and API key, then click <strong>Connect &amp; Load Data</strong>. These credentials are saved to this browser. Once connected, <strong>all users (Admin and Editor) automatically fetch live data from Google Sheets every time they log in</strong> — no manual loading required.
             </div>
             <div class="chart-card" style="margin-top:16px;background:var(--gray-50);border:1px solid var(--gray-200)">
-              <div class="chart-title" style="font-size:13px">📱 Use on Other Devices</div>
-              <div class="chart-subtitle" style="margin-bottom:12px">The Sheet ID is saved in this browser only. To use the same data on another device or browser, click <strong>🔗 Copy Shareable Link</strong> above — then open that link on the other device. The credentials will be saved automatically when the link is opened.</div>
+              <div class="chart-title" style="font-size:13px">📱 Using on Other Devices</div>
+              <div class="chart-subtitle" style="margin-bottom:12px">Sheet credentials are saved in <em>this browser only</em>. To enable auto-login on another device or browser:<br><br>
+              <strong>Option A (Recommended):</strong> Click <strong>📋 Copy Shareable Link</strong>, then open it on the other device. Credentials are saved automatically and all users can log in and get live data.<br><br>
+              <strong>Option B:</strong> On the other device, log in as Administrator, go to Admin → System Settings, and enter the Sheet ID and API Key manually.</div>
               <div id="stored-creds-display" style="font-size:12px;color:var(--gray-500)">
                 <!-- populated by renderStoredCreds() -->
               </div>
@@ -3196,7 +3206,7 @@ const SKILL_NORM = {"HAIR DRESSING":"HAIRDRESSING","AUTO MECHANIC":"AUTO MECHANI
 DB.forEach(r => { if(SKILL_NORM[r.SKILLS]) r.SKILLS = SKILL_NORM[r.SKILLS]; });
 
 // ── Auth ──
-function doLogin() {
+async function doLogin() {
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value.trim();
   const user = users.find(x => x.username===u && x.password===p);
@@ -3214,8 +3224,8 @@ function doLogin() {
       el.style.display = el.id === 'sb-connect-block' ? 'flex' : '';
     });
   }
-  initApp();
   logActivity(`${user.name} signed in`);
+  await initApp();
 }
 
 function doLogout() {
@@ -3224,44 +3234,32 @@ function doLogout() {
 }
 
 // ── Init ──
-function initApp() {
-  // Restore previously-loaded sheet data so every role shares the same dataset
-  // without needing to re-fetch from Google Sheets each time.
-  const cached = sessionStorage.getItem('knsap_db');
-  if (cached) {
-    try {
-      const parsed = JSON.parse(cached);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        DB = parsed;
-        DB.forEach(r => { if(SKILL_NORM[r.SKILLS]) r.SKILLS = SKILL_NORM[r.SKILLS]; });
-        populateSkillFilters();
-        updateMasterRecordCount();
-        updateTraineeRecordCount();
-        // Show live indicator as cached
-        const dot   = document.getElementById('live-dot');
-        const label = document.getElementById('live-label');
-        const sync  = document.getElementById('live-last-sync');
-        if (dot)   dot.style.background = '#16a34a';
-        if (label) { label.textContent = 'LIVE — ' + DB.length + ' records'; label.style.color = '#15803d'; }
-        if (sync)  { sync.style.display = 'block'; }
-        showPage('dashboard');
-        renderUsersAdmin();
-        // Still pre-fill credentials so admin panel shows them, but don't re-fetch
-        const id  = localStorage.getItem('knsap_sheet_id');
-        const key = localStorage.getItem('knsap_api_key');
-        if (id && key) {
-          const prefill = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val; };
-          prefill('gsheets-id', id); prefill('gsheets-key', key);
-          prefill('sb-sheet-id', id); prefill('sb-api-key', key);
-        }
-        return;
-      }
-    } catch(e) { /* fall through to normal load */ }
-  }
+async function initApp() {
   populateSkillFilters();
   showPage('dashboard');
   renderUsersAdmin();
-  tryAutoLoadSheets();
+
+  const id  = localStorage.getItem('knsap_sheet_id');
+  const key = localStorage.getItem('knsap_api_key');
+
+  if (id && key) {
+    // Always fetch live data from Google Sheets on login — this is the source of truth
+    // Pre-fill admin fields
+    const prefill = (elId, val) => { const el = document.getElementById(elId); if (el) el.value = val; };
+    prefill('gsheets-id', id); prefill('gsheets-key', key);
+    prefill('sb-sheet-id', id); prefill('sb-api-key', key);
+    // Fetch live data for ALL roles
+    await autoConnectSheets(id, key);
+  } else {
+    // No credentials stored — show placeholder data and prompt admin to configure
+    const dot   = document.getElementById('live-dot');
+    const label = document.getElementById('live-label');
+    if (dot)   dot.style.background = 'var(--gray-300)';
+    if (label) { label.textContent = 'No sheet configured'; label.style.color = 'var(--gray-500)'; }
+    if (currentUser?.role === 'admin') {
+      showToast('⚠️ No Google Sheet configured. Go to Admin → System Settings to connect.');
+    }
+  }
 }
 
 function populateSkillFilters() {
@@ -4187,62 +4185,19 @@ function copyShareableLink() {
 async function testGSheetsConnection() {
   const id = document.getElementById('gsheets-id').value.trim();
   const key = document.getElementById('gsheets-key').value.trim();
-  if (!id || !key) { showToast('Please enter Sheets ID and API key'); return; }
-  showToast('Connecting to Google Sheets…');
-  try {
-    // Fetch the COHORTS sheet (sheet index 3 = COHORTS based on database structure)
-    const range = encodeURIComponent('COHORTS!A1:Q2000');
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${id}/values/${range}?key=${key}`;
-    const res = await fetch(url);
-    if (!res.ok) { const err = await res.json(); showToast('❌ Error: ' + (err.error?.message || 'Check ID & API key')); return; }
-    const data = await res.json();
-    const rows = data.values || [];
-    if (rows.length < 2) { showToast('Sheet connected but no data found'); return; }
-    const headers = rows[0];
-    // Save credentials for future use
-    localStorage.setItem('knsap_sheet_id', id);
-    localStorage.setItem('knsap_api_key', key);
-    // Parse rows into DB format
-    const loaded = [];
-    for (let i = 1; i < rows.length; i++) {
-      const r = rows[i];
-      if (!r || r.length === 0) continue;
-      const obj = {};
-      headers.forEach((h, idx) => { obj[h] = r[idx] || ''; });
-      obj['COHORT'] = parseInt(obj['COHORT']) || 1;
-      obj['#'] = i;
-      loaded.push(obj);
-    }
-    DB = loaded;
-    populateSkillFilters();
-    showToast('✅ Loaded ' + loaded.length + ' records from Google Sheets!');
-    logActivity('Loaded ' + loaded.length + ' records from Google Sheets (ID: ' + id.slice(0,8) + '...)');
-    showPage('dashboard');
-    document.getElementById('backup-status').innerHTML = '<b>✅ Connected to Google Sheets.</b> ' + loaded.length + ' records loaded. Last sync: ' + new Date().toLocaleString();
-    document.getElementById('backup-status').style.display = 'flex';
-  } catch(e) {
-    showToast('❌ Connection failed: ' + e.message);
-  }
-}
-
-// Auto-load saved credentials on startup — admin only
-function tryAutoLoadSheets() {
-  if (!currentUser || currentUser.role !== 'admin') return;
-  const id  = localStorage.getItem('knsap_sheet_id');
-  const key = localStorage.getItem('knsap_api_key');
-  if (id && key) {
-    // Pre-fill Admin panel inputs
-    const idEl  = document.getElementById('gsheets-id');
-    const keyEl = document.getElementById('gsheets-key');
-    if (idEl)  idEl.value  = id;
-    if (keyEl) keyEl.value = key;
-    // Pre-fill sidebar inputs
-    const sbId  = document.getElementById('sb-sheet-id');
-    const sbKey = document.getElementById('sb-api-key');
-    if (sbId)  sbId.value  = id;
-    if (sbKey) sbKey.value = key;
-    autoConnectSheets(id, key);
-  }
+  if (!id || !key) { showToast('⚠️ Please enter Sheets ID and API key'); return; }
+  // Save credentials to localStorage so all users on this device auto-fetch on login
+  localStorage.setItem('knsap_sheet_id', id);
+  localStorage.setItem('knsap_api_key', key);
+  // Also sync to sidebar inputs
+  const sbId  = document.getElementById('sb-sheet-id');
+  const sbKey = document.getElementById('sb-api-key');
+  if (sbId)  sbId.value  = id;
+  if (sbKey) sbKey.value = key;
+  logActivity('Admin configured Google Sheets connection (ID: ' + id.slice(0,8) + '…)');
+  await autoConnectSheets(id, key);
+  // Update the stored creds display
+  renderStoredCreds();
 }
 
 // Called from the sidebar Connect button — admin only
@@ -4251,7 +4206,7 @@ function sidebarConnect() {
   const id  = document.getElementById('sb-sheet-id').value.trim();
   const key = document.getElementById('sb-api-key').value.trim();
   if (!id || !key) { showToast('⚠️ Enter both Sheet ID and API Key'); return; }
-  // Persist so admin panel stays in sync too
+  // Persist so all future logins on this device auto-connect
   localStorage.setItem('knsap_sheet_id', id);
   localStorage.setItem('knsap_api_key', key);
   const idEl  = document.getElementById('gsheets-id');
@@ -4262,14 +4217,24 @@ function sidebarConnect() {
   autoConnectSheets(id, key);
 }
 
+// Admin refresh: force re-fetch from Google Sheets right now
+function refreshFromSheet() {
+  if (!currentUser || currentUser.role !== 'admin') { showToast('⛔ Refresh is restricted to Administrator'); return; }
+  const id  = localStorage.getItem('knsap_sheet_id');
+  const key = localStorage.getItem('knsap_api_key');
+  if (!id || !key) { showToast('⚠️ No Google Sheet configured. Go to Admin → System Settings.'); return; }
+  showToast('🔄 Refreshing from Google Sheets…');
+  autoConnectSheets(id, key);
+  logActivity('Manual refresh from Google Sheets');
+}
+
 async function autoConnectSheets(id, key) {
   // Show connecting state on sidebar dot
   const dot   = document.getElementById('live-dot');
   const label = document.getElementById('live-label');
   const sync  = document.getElementById('live-last-sync');
   if (dot)   dot.style.background   = '#f59e0b';   // amber = connecting
-  if (label) label.textContent      = 'Connecting…';
-  if (label) label.style.color      = '#92400e';
+  if (label) { label.textContent = 'Fetching…'; label.style.color = '#92400e'; }
 
   try {
     const range = encodeURIComponent('COHORTS!A1:Q2000');
@@ -4307,10 +4272,9 @@ async function autoConnectSheets(id, key) {
       return;
     }
 
-    // ── Update in-memory DB ──
+    // ── Update in-memory DB — Google Sheet is the source of truth ──
     DB = loaded;
-    // Persist loaded data in sessionStorage so other roles don't need to re-fetch
-    try { sessionStorage.setItem('knsap_db', JSON.stringify(loaded)); } catch(e) { /* quota exceeded, skip */ }
+    DB.forEach(r => { if(SKILL_NORM[r.SKILLS]) r.SKILLS = SKILL_NORM[r.SKILLS]; });
     populateSkillFilters();
     updateMasterRecordCount();
     updateTraineeRecordCount();
@@ -4324,7 +4288,7 @@ async function autoConnectSheets(id, key) {
       if (pid === 'page-masters')    { currentPageMasters=1;   renderMasters(); }
       if (pid === 'page-trainees')   { currentPageTrainees=1;  renderTrainees(); }
     } else {
-      updateDashboard();  // safe fallback
+      updateDashboard();
     }
 
     // ── Update sidebar live indicator ──
