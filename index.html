@@ -3280,6 +3280,8 @@ function getGenderFromRecord(r) {
   if (raw === 'F') return 'FEMALE';
   return raw;
 }
+
+function populateSkillFilters() {
   const skills = [...new Set(DB.map(r=>r.SKILLS).filter(Boolean))].sort();
   ['f-skill','f-master-skill','f-trainee-skill'].forEach(id => {
     const sel = document.getElementById(id);
