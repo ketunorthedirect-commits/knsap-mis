@@ -162,6 +162,7 @@ function saveMasterRecord() {
     'M_FORM': document.getElementById('m-moa-val').checked ? 'YES' : '',
     'GRADUATION FEE': document.getElementById('m-grad-val').checked ? 'YES' : '',
     'PASSPORT PICTURE': photo && photo.startsWith('data:') ? photo : '',
+    'MASTER_PHOTO': photo && photo.startsWith('data:') ? photo : '',
     'NAME OF TRAINEE': '',
     'TRAINEE GENDER': '',
     'CONTACT OF TRAINEE': '',
@@ -247,6 +248,7 @@ function saveTraineeRecord() {
     'A_FORM': document.getElementById('t-moa-val').checked ? 'YES' : '',
     'EQUIPMENT RECEIVED': document.getElementById('t-equipment-val').checked ? 'YES' : '',
     'PASSPORT PICTURE': photo && photo.startsWith('data:') ? photo : '',
+    'TRAINEE_PHOTO': photo && photo.startsWith('data:') ? photo : '',
     'CONTACT OF MASTER': '',
     'MASTER ID NO': '',
     'AGREEMENT': '',
@@ -1446,6 +1448,33 @@ footer {
 
 footer span { color: var(--orange-light); font-weight: 600; }
 
+/* ─── LOCKOUT / SECURITY ─── */
+#login-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+#lockout-msg {
+  animation: pulse 1s infinite alternate;
+}
+@keyframes pulse {
+  from { opacity: 0.8; }
+  to   { opacity: 1; }
+}
+.assign-modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+/* ─── PHOTO IN TABLE ─── */
+.td-name {
+  white-space: nowrap;
+}
+/* ─── CHANGE REASON HIGHLIGHT ─── */
+textarea#cm-change-reason:invalid,
+textarea#delete-reason:invalid {
+  border-color: var(--red);
+}
+
 /* ─── RESPONSIVE ─── */
 @media (max-width: 900px) {
   #sidebar { display: none; }
@@ -2086,6 +2115,14 @@ footer span { color: var(--orange-light); font-weight: 600; }
             </select>
           </div>
           <div class="filter-group">
+            <span class="filter-label">Gender</span>
+            <select class="filter-select" id="f-cohort-gender" onchange="filterCohorts()">
+              <option value="">All Genders</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+            </select>
+          </div>
+          <div class="filter-group">
             <span class="filter-label">Payment</span>
             <select class="filter-select" id="f-payment" onchange="filterCohorts()">
               <option value="">All</option>
@@ -2114,7 +2151,9 @@ footer span { color: var(--orange-light); font-weight: 600; }
                   <th onclick="sortTable('cohorts','ZONE')">Zone</th>
                   <th onclick="sortTable('cohorts','BRANCH NAME')">Branch</th>
                   <th onclick="sortTable('cohorts','NAME OF MASTER')">Master</th>
+                  <th onclick="sortTable('cohorts','MASTER GENDER')">M.Gender</th>
                   <th onclick="sortTable('cohorts','NAME OF TRAINEE')">Trainee</th>
+                  <th onclick="sortTable('cohorts','TRAINEE GENDER')">T.Gender</th>
                   <th onclick="sortTable('cohorts','SKILLS')">Skill</th>
                   <th>Agreement</th>
                   <th>M.Form</th>
@@ -2913,38 +2952,111 @@ footer span { color: var(--orange-light); font-weight: 600; }
           <label>Skill *</label>
           <input type="text" id="cm-skill" placeholder="e.g. DRESSMAKING">
         </div>
-        <div class="form-group">
-          <label>Master Name *</label>
-          <input type="text" id="cm-master" placeholder="Full name">
-        </div>
-        <div class="form-group">
-          <label>Master Contact</label>
-          <input type="tel" id="cm-master-contact" placeholder="Phone number">
-        </div>
-        <div class="form-group">
-          <label>Master ID No</label>
-          <input type="text" id="cm-master-id" placeholder="ID number">
-        </div>
-        <div class="form-group">
-          <label>Trainee Name *</label>
-          <input type="text" id="cm-trainee" placeholder="Full name">
-        </div>
-        <div class="form-group">
-          <label>Trainee Contact</label>
-          <input type="tel" id="cm-trainee-contact" placeholder="Phone number">
-        </div>
-        <div class="form-group">
-          <label>Trainee ID No</label>
-          <input type="text" id="cm-trainee-id" placeholder="ID number">
-        </div>
-        <div class="form-group full">
-          <div style="display:flex;gap:24px;flex-wrap:wrap">
-            <div class="checkbox-group"><input type="checkbox" id="cm-agreement"><label for="cm-agreement">Agreement Paid</label></div>
-            <div class="checkbox-group"><input type="checkbox" id="cm-mform"><label for="cm-mform">MOA Form Done</label></div>
-            <div class="checkbox-group"><input type="checkbox" id="cm-prospectus"><label for="cm-prospectus">Prospectus Paid</label></div>
-            <div class="checkbox-group"><input type="checkbox" id="cm-aform"><label for="cm-aform">A.Form Submitted</label></div>
+      </div>
+      <!-- MASTER SECTION -->
+      <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-sm);padding:14px;margin:12px 0">
+        <div style="font-weight:700;color:var(--navy);font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">👨‍🏫 Master Trainer</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Master Name *</label>
+            <input type="text" id="cm-master" placeholder="Full name">
+          </div>
+          <div class="form-group">
+            <label>Master Gender</label>
+            <select id="cm-master-gender">
+              <option value="">Select</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Master Contact</label>
+            <input type="tel" id="cm-master-contact" placeholder="Phone number">
+          </div>
+          <div class="form-group">
+            <label>Master ID No</label>
+            <input type="text" id="cm-master-id" placeholder="ID number">
           </div>
         </div>
+        <!-- Master Passport Photo -->
+        <div style="margin-top:10px">
+          <label style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase">Master Passport Photo</label>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+            <img id="cm-master-photo" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid var(--gray-200);display:none" alt="Master photo">
+            <label style="cursor:pointer;background:var(--gray-100);border:1.5px dashed var(--gray-300);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--gray-500);text-transform:none;letter-spacing:0" onclick="document.getElementById('cm-master-photo-input').click()">
+              📷 Upload Photo
+            </label>
+            <input type="file" id="cm-master-photo-input" accept="image/*" style="display:none" onchange="previewModalPhoto(this,'cm-master-photo','MASTER_PHOTO')">
+          </div>
+        </div>
+        <!-- Linked Trainees (one-to-many) -->
+        <div id="cm-master-trainees-wrap" style="margin-top:12px;display:none">
+          <label style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase">Trainees Under This Master</label>
+          <div id="cm-master-trainees-list" style="margin-top:6px;max-height:120px;overflow-y:auto;border:1px solid var(--gray-200);border-radius:6px;padding:8px;background:white;font-size:12px"></div>
+        </div>
+      </div>
+      <!-- TRAINEE SECTION -->
+      <div style="background:var(--gray-50);border:1px solid var(--gray-200);border-radius:var(--radius-sm);padding:14px;margin:12px 0">
+        <div style="font-weight:700;color:var(--orange);font-size:13px;margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px">🧑‍🎓 Trainee</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Trainee Name *</label>
+            <input type="text" id="cm-trainee" placeholder="Full name">
+          </div>
+          <div class="form-group">
+            <label>Trainee Gender</label>
+            <select id="cm-trainee-gender">
+              <option value="">Select</option>
+              <option value="MALE">Male</option>
+              <option value="FEMALE">Female</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Trainee Contact</label>
+            <input type="tel" id="cm-trainee-contact" placeholder="Phone number">
+          </div>
+          <div class="form-group">
+            <label>Trainee ID No</label>
+            <input type="text" id="cm-trainee-id" placeholder="ID number">
+          </div>
+          <div class="form-group full">
+            <label>Level of Education</label>
+            <select id="cm-education">
+              <option value="">Select</option>
+              <option value="NONE">None</option>
+              <option value="PRIMARY">Primary</option>
+              <option value="JHS">Junior High School</option>
+              <option value="SHS">Senior High School</option>
+              <option value="TERTIARY">Tertiary</option>
+              <option value="VOCATIONAL">Vocational</option>
+            </select>
+          </div>
+        </div>
+        <!-- Trainee Passport Photo -->
+        <div style="margin-top:10px">
+          <label style="font-size:11px;color:var(--gray-500);font-weight:600;text-transform:uppercase">Trainee Passport Photo</label>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+            <img id="cm-trainee-photo" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:2px solid var(--gray-200);display:none" alt="Trainee photo">
+            <label style="cursor:pointer;background:var(--gray-100);border:1.5px dashed var(--gray-300);border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;color:var(--gray-500);text-transform:none;letter-spacing:0" onclick="document.getElementById('cm-trainee-photo-input').click()">
+              📷 Upload Photo
+            </label>
+            <input type="file" id="cm-trainee-photo-input" accept="image/*" style="display:none" onchange="previewModalPhoto(this,'cm-trainee-photo','TRAINEE_PHOTO')">
+          </div>
+        </div>
+      </div>
+      <!-- COMPLIANCE -->
+      <div class="form-group full" style="margin-top:4px">
+        <div style="display:flex;gap:24px;flex-wrap:wrap">
+          <div class="checkbox-group"><input type="checkbox" id="cm-agreement"><label for="cm-agreement">Agreement Paid</label></div>
+          <div class="checkbox-group"><input type="checkbox" id="cm-mform"><label for="cm-mform">MOA Form Done</label></div>
+          <div class="checkbox-group"><input type="checkbox" id="cm-prospectus"><label for="cm-prospectus">Prospectus Paid</label></div>
+          <div class="checkbox-group"><input type="checkbox" id="cm-aform"><label for="cm-aform">A.Form Submitted</label></div>
+        </div>
+      </div>
+      <!-- CHANGE REASON (required) -->
+      <div class="form-group full" style="margin-top:12px">
+        <label style="color:var(--red)">Reason for Change *</label>
+        <textarea id="cm-change-reason" rows="2" placeholder="Enter reason for this record change (required for audit log)..." style="border-color:var(--red-pale)"></textarea>
       </div>
     </div>
     <div class="modal-footer">
@@ -3006,9 +3118,15 @@ footer span { color: var(--orange-light); font-weight: 600; }
       </div>
       <p id="delete-desc" style="font-size:14px;color:var(--gray-700);margin-top:8px"></p>
     </div>
+    <div class="modal-body" style="padding-top:0">
+      <div class="form-group">
+        <label style="color:var(--red)">Reason for Deletion *</label>
+        <textarea id="delete-reason" rows="2" placeholder="Enter reason for deleting this record (required)..." style="border-color:var(--red-pale)"></textarea>
+      </div>
+    </div>
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('delete-modal')">Cancel</button>
-      <button class="btn btn-danger" onclick="confirmDelete()">Delete</button>
+      <button class="btn btn-danger" onclick="confirmDelete()">🗑️ Delete Record</button>
     </div>
   </div>
 </div>
@@ -3205,30 +3323,175 @@ let sortState = {};
 const SKILL_NORM = {"HAIR DRESSING":"HAIRDRESSING","AUTO MECHANIC":"AUTO MECHANICS","CARPENTERY":"CARPENTRY"};
 DB.forEach(r => { if(SKILL_NORM[r.SKILLS]) r.SKILLS = SKILL_NORM[r.SKILLS]; });
 
+// ── Auth Security State ──
+let loginAttempts = 0;
+let lockoutTimer = null;
+let inactivityTimer = null;
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_SECS = 120;
+const INACTIVITY_SECS = 600; // 10 minutes
+
+function toggleLoginPassword() {
+  const inp = document.getElementById('login-pass');
+  const icon = document.getElementById('pwd-eye-icon');
+  if (inp.type === 'password') {
+    inp.type = 'text';
+    icon.innerHTML = '<path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>';
+  } else {
+    inp.type = 'password';
+    icon.innerHTML = '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>';
+  }
+}
+
+function startLockout() {
+  loginAttempts = 0;
+  let secs = LOCKOUT_SECS;
+  const btn = document.getElementById('login-btn');
+  const msg = document.getElementById('lockout-msg');
+  const countdown = document.getElementById('lockout-countdown');
+  if (btn) btn.disabled = true;
+  if (msg) msg.style.display = 'block';
+  if (countdown) countdown.textContent = secs;
+  lockoutTimer = setInterval(() => {
+    secs--;
+    if (countdown) countdown.textContent = secs;
+    if (secs <= 0) {
+      clearInterval(lockoutTimer);
+      lockoutTimer = null;
+      if (btn) btn.disabled = false;
+      if (msg) msg.style.display = 'none';
+    }
+  }, 1000);
+}
+
+function resetInactivityTimer() {
+  clearTimeout(inactivityTimer);
+  if (!currentUser) return;
+  inactivityTimer = setTimeout(() => {
+    if (currentUser) {
+      logActivity('Auto-logout: 10 minutes inactivity');
+      showToast('⏱️ You have been logged out due to inactivity.');
+      setTimeout(() => { currentUser = null; location.reload(); }, 1500);
+    }
+  }, INACTIVITY_SECS * 1000);
+}
+
+// Reset timer on user activity
+['mousemove','keydown','click','scroll','touchstart'].forEach(evt => {
+  document.addEventListener(evt, resetInactivityTimer, { passive: true });
+});
+
 // ── Auth ──
 async function doLogin() {
+  if (lockoutTimer) return; // locked out
   const u = document.getElementById('login-user').value.trim();
   const p = document.getElementById('login-pass').value.trim();
-  const user = users.find(x => x.username===u && x.password===p);
-  if (!user) { document.getElementById('login-error').style.display='block'; return; }
+  const user = users.find(x => x.username === u && x.password === p);
+  if (!user) {
+    loginAttempts++;
+    const errEl = document.getElementById('login-error');
+    const remaining = MAX_ATTEMPTS - loginAttempts;
+    if (errEl) {
+      errEl.style.display = 'block';
+      errEl.textContent = remaining > 0
+        ? `Invalid username or password. ${remaining} attempt(s) remaining.`
+        : 'Account temporarily locked.';
+    }
+    if (loginAttempts >= MAX_ATTEMPTS) startLockout();
+    return;
+  }
+  loginAttempts = 0;
+  document.getElementById('login-error').style.display = 'none';
+
+  // Check first-time login (password = default pattern or flagged)
+  if (user.mustChangePassword) {
+    currentUser = user;
+    showFirstLoginModal(user);
+    return;
+  }
+
   currentUser = user;
-  document.getElementById('login-page').style.display='none';
-  document.getElementById('top-nav').style.display='flex';
-  document.getElementById('app').style.display='flex';
-  document.getElementById('main-footer').style.display='block';
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('top-nav').style.display = 'flex';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('main-footer').style.display = 'block';
   document.getElementById('nav-username').textContent = user.name;
-  document.getElementById('nav-avatar').textContent = user.name[0];
+  const av = document.getElementById('nav-avatar');
+  av.textContent = user.name[0];
+  const colors = {admin:'var(--orange)', editor:'var(--navy)', guest:'var(--gray-500)'};
+  av.style.background = colors[user.role] || 'var(--navy)';
   if (user.role === 'admin') {
     document.querySelectorAll('.admin-only').forEach(el => {
-      // Preserve flex layout for elements that need it
       el.style.display = el.id === 'sb-connect-block' ? 'flex' : '';
     });
   }
-  logActivity(`${user.name} signed in`);
+  logActivity(`${user.name} signed in (${user.role})`);
+  resetInactivityTimer();
   await initApp();
 }
 
+function showFirstLoginModal(user) {
+  // Inject first-login modal if not present
+  if (!document.getElementById('first-login-modal')) {
+    const m = document.createElement('div');
+    m.className = 'modal-overlay';
+    m.id = 'first-login-modal';
+    m.style.display = 'flex';
+    m.innerHTML = `<div class="modal" style="max-width:400px">
+      <div class="modal-header" style="background:var(--navy-dark)">
+        <span class="modal-title" style="color:white">🔐 Change Your Password</span>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-warning" style="margin-bottom:16px">First login detected. You must set a new password before continuing.</div>
+        <div class="form-group" style="margin-bottom:12px">
+          <label>New Password *</label>
+          <input type="password" id="flm-new-pass" placeholder="Enter new password (min 6 chars)">
+        </div>
+        <div class="form-group">
+          <label>Confirm Password *</label>
+          <input type="password" id="flm-confirm-pass" placeholder="Re-enter new password">
+        </div>
+        <div id="flm-error" style="color:var(--red);font-size:13px;margin-top:8px;display:none"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-primary" onclick="saveFirstLoginPassword()">Set Password & Continue</button>
+      </div>
+    </div>`;
+    document.body.appendChild(m);
+  }
+  document.getElementById('first-login-modal').style.display = 'flex';
+}
+
+function saveFirstLoginPassword() {
+  const np = document.getElementById('flm-new-pass').value.trim();
+  const cp = document.getElementById('flm-confirm-pass').value.trim();
+  const err = document.getElementById('flm-error');
+  if (np.length < 6) { err.style.display='block'; err.textContent='Password must be at least 6 characters.'; return; }
+  if (np !== cp) { err.style.display='block'; err.textContent='Passwords do not match.'; return; }
+  // Save new password
+  const u = users.find(x => x.id === currentUser.id);
+  if (u) { u.password = np; u.mustChangePassword = false; persistUsers(); }
+  document.getElementById('first-login-modal').style.display = 'none';
+  // Continue login flow
+  document.getElementById('login-page').style.display = 'none';
+  document.getElementById('top-nav').style.display = 'flex';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('main-footer').style.display = 'block';
+  document.getElementById('nav-username').textContent = currentUser.name;
+  document.getElementById('nav-avatar').textContent = currentUser.name[0];
+  if (currentUser.role === 'admin') {
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = el.id === 'sb-connect-block' ? 'flex' : '';
+    });
+  }
+  logActivity(`${currentUser.name} changed password on first login`);
+  resetInactivityTimer();
+  initApp();
+}
+
 function doLogout() {
+  clearTimeout(inactivityTimer);
+  logActivity(`${currentUser?.name || 'User'} signed out`);
   currentUser = null;
   location.reload();
 }
@@ -3603,6 +3866,13 @@ function updateDashboard() {
 // ── Cohorts Table ──
 function getCohortsFiltered() {
   let data = [...DB];
+  // Apply editor zone/skill restrictions
+  if (currentUser && currentUser.role === 'editor') {
+    const az = currentUser.allowedZones || [];
+    const as_ = currentUser.allowedSkills || [];
+    if (az.length) data = data.filter(r => az.includes(r.ZONE));
+    if (as_.length) data = data.filter(r => as_.includes(r.SKILLS));
+  }
   const search = document.getElementById('cohort-search')?.value.toLowerCase()||'';
   const cohort = document.getElementById('f-cohort')?.value;
   const zone = document.getElementById('f-zone')?.value;
@@ -3619,6 +3889,12 @@ function getCohortsFiltered() {
   if (cohort) data = data.filter(r => String(r.COHORT) === cohort);
   if (zone) data = data.filter(r => r.ZONE === zone);
   if (skill) data = data.filter(r => r.SKILLS === skill);
+  const genderF = document.getElementById('f-cohort-gender')?.value;
+  if (genderF) data = data.filter(r => {
+    const mg = (r['MASTER GENDER']||r['GENDER']||'').toUpperCase();
+    const tg = (r['TRAINEE GENDER']||r['GENDER']||'').toUpperCase();
+    return mg === genderF || tg === genderF;
+  });
   if (payment === 'agreement') data = data.filter(r => r.AGREEMENT === 'YES');
   if (payment === 'prospectus') data = data.filter(r => ['YES','PAID'].includes(r.PROSPECTUS));
   if (payment === 'moa') data = data.filter(r => ['YES','SUBMITTED'].includes(r.M_FORM));
@@ -3634,14 +3910,24 @@ function renderCohorts() {
   if (!page.length) {
     tbody.innerHTML = `<tr><td colspan="12"><div class="empty-state"><svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg><h3>No records found</h3><p>Try adjusting your search or filters</p></div></td></tr>`;
   } else {
-    tbody.innerHTML = page.map((r,i) => `
+    tbody.innerHTML = page.map((r,i) => {
+      const mGender = r['MASTER GENDER'] || r['GENDER'] || '';
+      const tGender = r['TRAINEE GENDER'] || r['GENDER'] || '';
+      const gBadge = (g) => {
+        if (!g) return '—';
+        const isFemale = g.toUpperCase() === 'FEMALE';
+        return `<span class="badge ${isFemale ? 'badge-amber' : 'badge-blue'}" style="font-size:10px">${isFemale ? '♀ F' : '♂ M'}</span>`;
+      };
+      return `
       <tr>
         <td><span style="color:var(--gray-500);font-size:12px">${start+i+1}</span></td>
         <td><span class="cohort-badge cohort-${r.COHORT}">${r.COHORT}</span></td>
         <td><span class="badge badge-blue">${r.ZONE||'—'}</span></td>
         <td style="max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['BRANCH NAME']||'—'}</td>
         <td class="td-name">${r['NAME OF MASTER']||'—'}</td>
+        <td>${gBadge(mGender)}</td>
         <td>${r['NAME OF TRAINEE']||'—'}</td>
+        <td>${gBadge(tGender)}</td>
         <td><span class="badge badge-gray">${r.SKILLS||'—'}</span></td>
         <td>${yesnoBadge(r.AGREEMENT)}</td>
         <td>${yesnoBadge(r.M_FORM)}</td>
@@ -3660,8 +3946,8 @@ function renderCohorts() {
             </button>
           </div>
         </td>
-      </tr>
-    `).join('');
+      </tr>`;
+    }).join('');
   }
   renderPagination('cohorts', data.length, currentPageCohorts, (p) => { currentPageCohorts=p; renderCohorts(); });
 }
@@ -3709,11 +3995,16 @@ function renderMasters() {
   const start = (currentPageMasters-1)*PAGE_SIZE;
   const page = data.slice(start, start+PAGE_SIZE);
   const tbody = document.getElementById('masters-tbody');
-  tbody.innerHTML = page.map((m,i) => `
+  tbody.innerHTML = page.map((m,i) => {
+    const masterRec = DB.find(r => r['NAME OF MASTER'] === m.name && r['MASTER_PHOTO']);
+    const photoHtml = masterRec?.MASTER_PHOTO
+      ? `<img src="${masterRec.MASTER_PHOTO}" style="width:30px;height:30px;border-radius:50%;object-fit:cover;border:1.5px solid var(--gray-200);margin-right:6px;vertical-align:middle">`
+      : `<span style="display:inline-flex;width:30px;height:30px;border-radius:50%;background:var(--navy-light);color:white;align-items:center;justify-content:center;font-weight:700;font-size:12px;margin-right:6px;vertical-align:middle">${m.name[0]}</span>`;
+    return `
     <tr>
       <td style="color:var(--gray-500);font-size:12px">${start+i+1}</td>
-      <td class="td-name">${m.name}</td>
-      <td>${m.gender ? '<span class="badge '+(m.gender==='FEMALE'?'badge-amber':'badge-blue')+'">'+(m.gender==='FEMALE'?'F':'M')+'</span>' : '—'}</td>
+      <td class="td-name" style="display:flex;align-items:center">${photoHtml}${m.name}</td>
+      <td>${m.gender ? '<span class="badge '+(m.gender==='FEMALE'?'badge-amber':'badge-blue')+'">'+(m.gender==='FEMALE'?'♀ F':'♂ M')+'</span>' : '—'}</td>
       <td><span class="badge badge-blue">${m.zone||'—'}</span></td>
       <td style="font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${m.branch||'—'}</td>
       <td><span class="badge badge-gray" style="font-size:10px">${(m.skills||'—').split(',')[0]}</span></td>
@@ -3733,8 +4024,8 @@ function renderMasters() {
           </button>
         </div>
       </td>
-    </tr>
-  `).join('');
+    </tr>`;
+  }).join('');
   renderPagination('masters', data.length, currentPageMasters, (p) => { currentPageMasters=p; renderMasters(); });
 }
 
@@ -3760,11 +4051,16 @@ function renderTrainees() {
   const start = (currentPageTrainees-1)*PAGE_SIZE;
   const page = data.slice(start, start+PAGE_SIZE);
   const tbody = document.getElementById('trainees-tbody');
-  tbody.innerHTML = page.map((r,i) => `
+  tbody.innerHTML = page.map((r,i) => {
+    const tg = r['TRAINEE GENDER']||r['GENDER']||'';
+    const tPhotoHtml = r.TRAINEE_PHOTO
+      ? `<img src="${r.TRAINEE_PHOTO}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1.5px solid var(--gray-200);margin-right:5px;vertical-align:middle">`
+      : `<span style="display:inline-flex;width:28px;height:28px;border-radius:50%;background:${tg==='FEMALE'?'#db2777':'var(--navy)'};color:white;align-items:center;justify-content:center;font-weight:700;font-size:11px;margin-right:5px;vertical-align:middle">${(r['NAME OF TRAINEE']||'?')[0]}</span>`;
+    return `
     <tr>
       <td style="color:var(--gray-500);font-size:12px">${start+i+1}</td>
-      <td class="td-name">${r['NAME OF TRAINEE']||'—'}</td>
-      <td>${r['TRAINEE GENDER']||r['GENDER'] ? '<span class="badge '+(( r['TRAINEE GENDER']||r['GENDER'])==='FEMALE'?'badge-amber':'badge-blue')+'">'+(( r['TRAINEE GENDER']||r['GENDER'])==='FEMALE'?'F':'M')+'</span>' : '—'}</td>
+      <td class="td-name" style="display:flex;align-items:center">${tPhotoHtml}${r['NAME OF TRAINEE']||'—'}</td>
+      <td>${tg ? '<span class="badge '+(tg==='FEMALE'?'badge-amber':'badge-blue')+'">'+(tg==='FEMALE'?'♀ F':'♂ M')+'</span>' : '—'}</td>
       <td><span class="badge badge-blue">${r.ZONE||'—'}</span></td>
       <td style="font-size:12px;max-width:90px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['BRANCH NAME']||'—'}</td>
       <td><span class="badge badge-gray" style="font-size:10px">${r.SKILLS||'—'}</span></td>
@@ -3825,11 +4121,19 @@ function viewRecord(idx, type) {
   if (!r) return;
   const name = type === 'master' ? r['NAME OF MASTER'] : r['NAME OF TRAINEE'];
   const initial = (name||'?')[0];
+  const photoKey = type === 'master' ? 'MASTER_PHOTO' : 'TRAINEE_PHOTO';
+  const photoSrc = r[photoKey] || '';
   document.getElementById('profile-header').innerHTML = `
-    <div class="profile-avatar">${initial}</div>
+    <div style="position:relative">
+      ${photoSrc
+        ? `<img src="${photoSrc}" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:3px solid rgba(255,255,255,0.4)">`
+        : `<div class="profile-avatar">${initial}</div>`
+      }
+    </div>
     <div>
       <div class="profile-name">${name||'Unknown'}</div>
       <div class="profile-meta">${r.SKILLS||''} · ${r.ZONE||''} · Cohort ${r.COHORT}</div>
+      ${r['MASTER GENDER'] || r['TRAINEE GENDER'] ? `<div style="margin-top:4px"><span style="font-size:11px;background:rgba(255,255,255,0.2);color:white;padding:2px 8px;border-radius:10px">${r['TRAINEE GENDER']||r['MASTER GENDER']||''}</span></div>` : ''}
     </div>
   `;
   const fields = type === 'master' ? [
@@ -3837,6 +4141,7 @@ function viewRecord(idx, type) {
     ['Branch', r['BRANCH NAME']],
     ['Cohort', `Cohort ${r.COHORT}`],
     ['Skill', r.SKILLS],
+    ['Gender', r['MASTER GENDER'] || r['GENDER'] || 'N/A'],
     ['Contact', r['CONTACT OF MASTER']],
     ['Master ID', r['MASTER ID NO']||'N/A'],
     ['Agreement Fee', r.AGREEMENT||'NO'],
@@ -3847,6 +4152,8 @@ function viewRecord(idx, type) {
     ['Branch', r['BRANCH NAME']],
     ['Cohort', `Cohort ${r.COHORT}`],
     ['Skill', r.SKILLS],
+    ['Gender', r['TRAINEE GENDER'] || r['GENDER'] || 'N/A'],
+    ['Education', r['LEVEL OF EDUCATION'] || 'N/A'],
     ['Contact', r['CONTACT OF TRAINEE']],
     ['Trainee ID', r['TRAINEE ID NO']||'N/A'],
     ['Prospectus Fee', r.PROSPECTUS||'NO'],
@@ -3884,6 +4191,24 @@ function editRecord(idx) {
   document.getElementById('cm-mform').checked = ['YES','SUBMITTED'].includes(r.M_FORM);
   document.getElementById('cm-prospectus').checked = ['YES','PAID'].includes(r.PROSPECTUS);
   document.getElementById('cm-aform').checked = ['YES','PAID','SUBMITTED'].includes(r.A_FORM);
+  // Populate gender fields
+  const mgEl = document.getElementById('cm-master-gender');
+  if (mgEl) mgEl.value = r['MASTER GENDER'] || r['GENDER'] || '';
+  const tgEl = document.getElementById('cm-trainee-gender');
+  if (tgEl) tgEl.value = r['TRAINEE GENDER'] || r['GENDER'] || '';
+  const edEl = document.getElementById('cm-education');
+  if (edEl) edEl.value = r['LEVEL OF EDUCATION'] || '';
+  const crEl = document.getElementById('cm-change-reason');
+  if (crEl) crEl.value = '';
+  // Populate passport photo
+  const mPhotoEl = document.getElementById('cm-master-photo');
+  if (mPhotoEl) mPhotoEl.src = r['MASTER_PHOTO'] || '';
+  if (mPhotoEl) mPhotoEl.style.display = r['MASTER_PHOTO'] ? 'block' : 'none';
+  const tPhotoEl = document.getElementById('cm-trainee-photo');
+  if (tPhotoEl) tPhotoEl.src = r['TRAINEE_PHOTO'] || '';
+  if (tPhotoEl) tPhotoEl.style.display = r['TRAINEE_PHOTO'] ? 'block' : 'none';
+  // Show linked trainees for master
+  renderMasterTraineesInModal(r['NAME OF MASTER']);
   document.getElementById('cohort-modal-title').textContent = 'Edit Record';
   document.getElementById('cohort-modal').classList.add('open');
 }
@@ -3892,31 +4217,57 @@ function editRecord(idx) {
 function saveCohortRecord() {
   const idx = parseInt(document.getElementById('cm-idx').value);
   const isEdit = !isNaN(idx) && idx >= 0;
+  const masterName = document.getElementById('cm-master').value.toUpperCase();
+  const traineeName = document.getElementById('cm-trainee').value.toUpperCase();
+  // Auto-resolve gender from existing master/trainee records
+  const masterRec = DB.find(r => r['NAME OF MASTER'] && r['NAME OF MASTER'].toUpperCase() === masterName);
+  const traineeRec = DB.find(r => r['NAME OF TRAINEE'] && r['NAME OF TRAINEE'].toUpperCase() === traineeName);
+  const resolvedMasterGender = document.getElementById('cm-master-gender').value || (masterRec ? (masterRec['MASTER GENDER']||masterRec['GENDER']||'') : '');
+  const resolvedTraineeGender = document.getElementById('cm-trainee-gender').value || (traineeRec ? (traineeRec['TRAINEE GENDER']||traineeRec['GENDER']||'') : '');
   const newRec = {
     '#': isEdit ? DB[idx]['#'] : DB.length+1,
     'COHORT': parseInt(document.getElementById('cm-cohort').value),
     'ZONE': document.getElementById('cm-zone').value,
     'BRANCH NAME': document.getElementById('cm-branch').value,
     'SKILLS': document.getElementById('cm-skill').value.toUpperCase(),
-    'NAME OF MASTER': document.getElementById('cm-master').value.toUpperCase(),
+    'NAME OF MASTER': masterName,
     'CONTACT OF MASTER': document.getElementById('cm-master-contact').value,
     'MASTER ID NO': document.getElementById('cm-master-id').value,
-    'NAME OF TRAINEE': document.getElementById('cm-trainee').value.toUpperCase(),
+    'MASTER GENDER': resolvedMasterGender.toUpperCase(),
+    'NAME OF TRAINEE': traineeName,
     'CONTACT OF TRAINEE': document.getElementById('cm-trainee-contact').value,
     'TRAINEE ID NO': document.getElementById('cm-trainee-id').value,
+    'TRAINEE GENDER': resolvedTraineeGender.toUpperCase(),
+    'GENDER': resolvedTraineeGender.toUpperCase(),
+    'LEVEL OF EDUCATION': document.getElementById('cm-education')?.value || '',
     'AGREEMENT': document.getElementById('cm-agreement').checked ? 'YES' : '',
     'M_FORM': document.getElementById('cm-mform').checked ? 'YES' : '',
     'PROSPECTUS': document.getElementById('cm-prospectus').checked ? 'YES' : '',
     'A_FORM': document.getElementById('cm-aform').checked ? 'YES' : '',
-    'MASTER GENDER':'', 'TRAINEE GENDER':''
+    'CHANGE_REASON': document.getElementById('cm-change-reason')?.value || '',
+    'MASTER_PHOTO': pendingPhotos['MASTER_PHOTO'] || (isEdit ? DB[idx]['MASTER_PHOTO'] : ''),
+    'TRAINEE_PHOTO': pendingPhotos['TRAINEE_PHOTO'] || (isEdit ? DB[idx]['TRAINEE_PHOTO'] : '')
   };
   if (!newRec['NAME OF MASTER'] || !newRec['NAME OF TRAINEE']) { showToast('Please fill in required fields'); return; }
-  if (isEdit) { DB[idx] = newRec; logActivity(`Edited record #${newRec['#']}: ${newRec['NAME OF TRAINEE']}`); }
-  else { DB.push(newRec); logActivity(`Added record: ${newRec['NAME OF TRAINEE']}`); }
+  const changeReason = (document.getElementById('cm-change-reason')?.value || '').trim();
+  if (!changeReason) { showToast('⚠️ Please enter a reason for this change.'); document.getElementById('cm-change-reason')?.focus(); return; }
+  newRec['CHANGE_REASON'] = changeReason;
+  if (isEdit) {
+    DB[idx] = { ...DB[idx], ...newRec };
+    logActivity(`Edited record #${newRec['#']}: ${newRec['NAME OF TRAINEE']} — Reason: ${changeReason}`);
+    // Propagate gender back to all records with same master/trainee
+    if (newRec['MASTER GENDER']) DB.filter(r => r['NAME OF MASTER'] === newRec['NAME OF MASTER']).forEach(r => { r['MASTER GENDER'] = newRec['MASTER GENDER']; });
+    if (newRec['TRAINEE GENDER']) DB.filter(r => r['NAME OF TRAINEE'] === newRec['NAME OF TRAINEE']).forEach(r => { r['TRAINEE GENDER'] = newRec['TRAINEE GENDER']; r['GENDER'] = newRec['TRAINEE GENDER']; });
+  } else {
+    DB.push(newRec);
+    logActivity(`Added record: ${newRec['NAME OF TRAINEE']} — Reason: ${changeReason}`);
+  }
+  pendingPhotos = {};
   closeModal('cohort-modal');
   document.getElementById('cm-idx').value = '';
-  showToast(isEdit ? 'Record updated' : 'Record added');
+  showToast(isEdit ? '✅ Record updated' : '✅ Record added');
   filterCohorts();
+  updateDashboard();
 }
 
 // ── Delete Record ──
@@ -3925,26 +4276,36 @@ function deleteRecord(idx, type) {
   deleteTarget = idx;
   const r = DB[idx];
   document.getElementById('delete-desc').textContent = `Trainee: ${r['NAME OF TRAINEE']||'—'} | Master: ${r['NAME OF MASTER']||'—'} | Skill: ${r.SKILLS||'—'}`;
+  const reasonEl = document.getElementById('delete-reason');
+  if (reasonEl) reasonEl.value = '';
   document.getElementById('delete-modal').classList.add('open');
 }
 
 function confirmDelete() {
   if (deleteTarget === null) return;
+  const reason = (document.getElementById('delete-reason')?.value || '').trim();
+  if (!reason) { showToast('⚠️ Please enter a reason for deletion.'); document.getElementById('delete-reason')?.focus(); return; }
   const r = DB[deleteTarget];
-  logActivity(`Deleted record: ${r['NAME OF TRAINEE']||r['NAME OF MASTER']}`);
+  logActivity(`Deleted record: ${r['NAME OF TRAINEE']||r['NAME OF MASTER']} — Reason: ${reason}`);
   DB.splice(deleteTarget, 1);
   deleteTarget = null;
   closeModal('delete-modal');
-  showToast('Record deleted');
+  showToast('✅ Record deleted');
   filterCohorts();
+  updateDashboard();
 }
 
 // ── Add Modals ──
 function openAddCohortModal() {
+  pendingPhotos = {};
   document.getElementById('cm-idx').value = '';
   document.getElementById('cohort-modal-title').textContent = 'Add Cohort Record';
-  ['cm-branch','cm-skill','cm-master','cm-master-contact','cm-master-id','cm-trainee','cm-trainee-contact','cm-trainee-id'].forEach(id=>document.getElementById(id).value='');
-  ['cm-agreement','cm-mform','cm-prospectus','cm-aform'].forEach(id=>document.getElementById(id).checked=false);
+  ['cm-branch','cm-skill','cm-master','cm-master-contact','cm-master-id','cm-trainee','cm-trainee-contact','cm-trainee-id'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  ['cm-agreement','cm-mform','cm-prospectus','cm-aform'].forEach(id => { const el = document.getElementById(id); if(el) el.checked=false; });
+  ['cm-master-gender','cm-trainee-gender','cm-education','cm-change-reason'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  ['cm-master-photo','cm-trainee-photo'].forEach(id => { const el = document.getElementById(id); if(el) { el.src=''; el.style.display='none'; } });
+  const wrap = document.getElementById('cm-master-trainees-wrap');
+  if (wrap) wrap.style.display = 'none';
   document.getElementById('cohort-modal').classList.add('open');
 }
 
@@ -3952,6 +4313,9 @@ function openAddMasterModal() { openAddCohortModal(); }
 function openAddTraineeModal() { openAddCohortModal(); }
 
 // ── Admin ──
+const ALL_ZONES = ['DZODZE','WETA','AFIFE','PENYI'];
+const ALL_SKILLS_LIST = ['DRESSMAKING','HAIRDRESSING','ELECTRICAL WORKS','DRIVING','TAILORING','WELDING','AUTO MECHANICS','CARPENTRY','MASONRY','MOTOR FITTING','ALUMINIUM GLASS WORK','DECORATION','SPRAYING','BARBERING','PLUMBING','BAKING'];
+
 function renderUsersAdmin() {
   const el = document.getElementById('users-list');
   if (!el) return;
@@ -3963,26 +4327,105 @@ function renderUsersAdmin() {
     const initial = (u.name || u.username || '?')[0].toUpperCase();
     const isSelf  = currentUser && u.id === currentUser.id;
     const isAdmin = currentUser && currentUser.role === 'admin';
+    const allowedZones = u.allowedZones || [];
+    const allowedSkills = u.allowedSkills || [];
+    const zoneChips = allowedZones.length ? allowedZones.map(z=>`<span style="font-size:10px;background:var(--navy-light);color:white;padding:1px 6px;border-radius:10px">${z}</span>`).join(' ') : '<span style="color:var(--gray-400);font-size:11px">All zones</span>';
+    const skillChips = allowedSkills.length ? allowedSkills.map(s=>`<span style="font-size:10px;background:var(--orange-pale);color:var(--orange);padding:1px 6px;border-radius:10px">${s}</span>`).join(' ') : '<span style="color:var(--gray-400);font-size:11px">All skills</span>';
     return `
-    <div class="user-card">
+    <div class="user-card" style="flex-wrap:wrap;gap:10px">
       <div class="user-avatar ua-${u.role}">${initial}</div>
-      <div style="flex:1;min-width:0">
-        <div style="font-weight:700;color:var(--navy-dark)">${u.name || '<em style=color:var(--gray-400)>No name</em>'}${isSelf ? ' <span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:99px;font-weight:600">YOU</span>' : ''}</div>
+      <div style="flex:1;min-width:180px">
+        <div style="font-weight:700;color:var(--navy-dark)">${u.name || '<em style=color:var(--gray-400)>No name</em>'}${isSelf ? ' <span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 6px;border-radius:99px;font-weight:600">YOU</span>' : ''}${u.mustChangePassword ? ' <span style="font-size:10px;background:var(--amber-pale);color:var(--amber);padding:1px 6px;border-radius:99px;font-weight:600">⚠ Must Change Password</span>' : ''}</div>
         <div style="font-size:12px;color:var(--gray-500);margin-top:2px">@${u.username} &nbsp;·&nbsp; ${u.role === 'admin' ? 'Administrator' : 'Editor'}</div>
+        ${u.role === 'editor' ? `<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;align-items:center"><span style="font-size:11px;font-weight:600;color:var(--gray-500)">Zones:</span>${zoneChips}</div>
+        <div style="margin-top:4px;display:flex;flex-wrap:wrap;gap:4px;align-items:center"><span style="font-size:11px;font-weight:600;color:var(--gray-500)">Skills:</span>${skillChips}</div>` : ''}
       </div>
       <span class="badge ${u.role === 'admin' ? 'badge-amber' : 'badge-blue'}" style="flex-shrink:0">${u.role === 'admin' ? 'Admin' : 'Editor'}</span>
       ${isAdmin ? `
-        <button class="btn btn-outline btn-sm" onclick="openEditUserModal(${u.id})" style="flex-shrink:0">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          Edit
-        </button>
-        ${!isSelf ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})" style="flex-shrink:0">
-          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>
-          Delete
-        </button>` : ''}
+        <div style="display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="openEditUserModal(${u.id})">✏️ Edit</button>
+          <button class="btn btn-outline btn-sm" onclick="openAssignModal(${u.id})" style="color:var(--navy)">🗺️ Assign</button>
+          <button class="btn btn-outline btn-sm" onclick="resetUserPassword(${u.id})" style="color:var(--amber)">🔑 Reset Pwd</button>
+          ${!isSelf ? `<button class="btn btn-danger btn-sm" onclick="deleteUser(${u.id})">🗑️ Delete</button>` : ''}
+        </div>
       ` : ''}
     </div>`;
   }).join('');
+}
+
+function resetUserPassword(id) {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const u = users.find(x => x.id === id);
+  if (!u) return;
+  const defaultPwd = 'knsap2026';
+  u.password = defaultPwd;
+  u.mustChangePassword = true;
+  persistUsers();
+  logActivity(`Admin reset password for ${u.username} — must change on next login`);
+  renderUsersAdmin();
+  showToast(`✅ Password reset for ${u.name}. Default: "${defaultPwd}". User must change on login.`);
+}
+
+function openAssignModal(userId) {
+  if (!currentUser || currentUser.role !== 'admin') return;
+  const u = users.find(x => x.id === userId);
+  if (!u) return;
+  const existing = document.getElementById('assign-modal');
+  if (existing) existing.remove();
+  const allowedZones = u.allowedZones || [];
+  const allowedSkills = u.allowedSkills || [];
+  const zoneCheckboxes = ALL_ZONES.map(z => `
+    <label style="display:flex;align-items:center;gap:8px;padding:6px 0;cursor:pointer;font-size:13px;font-weight:normal;text-transform:none;letter-spacing:0">
+      <input type="checkbox" value="${z}" ${allowedZones.includes(z) ? 'checked' : ''} class="assign-zone-cb" style="width:16px;height:16px;accent-color:var(--navy)">
+      <span class="badge badge-blue">${z}</span>
+    </label>`).join('');
+  const skillCheckboxes = ALL_SKILLS_LIST.map(s => `
+    <label style="display:flex;align-items:center;gap:8px;padding:4px 0;cursor:pointer;font-size:12px;font-weight:normal;text-transform:none;letter-spacing:0">
+      <input type="checkbox" value="${s}" ${allowedSkills.includes(s) ? 'checked' : ''} class="assign-skill-cb" style="width:15px;height:15px;accent-color:var(--orange)">
+      ${s}
+    </label>`).join('');
+  const modal = document.createElement('div');
+  modal.className = 'modal-overlay';
+  modal.id = 'assign-modal';
+  modal.style.display = 'flex';
+  modal.innerHTML = `<div class="modal" style="max-width:520px">
+    <div class="modal-header">
+      <span class="modal-title">Assign Zones & Skills — ${u.name}</span>
+      <button class="modal-close" onclick="document.getElementById('assign-modal').remove()">✕</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--gray-500);margin-bottom:16px">Select which zones and skills this editor can access. Leave all unchecked to allow access to everything.</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+        <div>
+          <div style="font-weight:700;color:var(--navy);font-size:13px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🗺️ Zones</div>
+          ${zoneCheckboxes}
+          <button class="btn btn-outline btn-sm" style="margin-top:8px;font-size:11px" onclick="document.querySelectorAll('.assign-zone-cb').forEach(c=>c.checked=false)">Clear All</button>
+        </div>
+        <div>
+          <div style="font-weight:700;color:var(--orange);font-size:13px;margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">🛠️ Skills</div>
+          <div style="max-height:220px;overflow-y:auto">${skillCheckboxes}</div>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px;font-size:11px" onclick="document.querySelectorAll('.assign-skill-cb').forEach(c=>c.checked=false)">Clear All</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="document.getElementById('assign-modal').remove()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveAssignments(${userId})">💾 Save Assignments</button>
+    </div>
+  </div>`;
+  document.body.appendChild(modal);
+}
+
+function saveAssignments(userId) {
+  const u = users.find(x => x.id === userId);
+  if (!u) return;
+  u.allowedZones = [...document.querySelectorAll('.assign-zone-cb:checked')].map(c => c.value);
+  u.allowedSkills = [...document.querySelectorAll('.assign-skill-cb:checked')].map(c => c.value);
+  persistUsers();
+  document.getElementById('assign-modal')?.remove();
+  renderUsersAdmin();
+  logActivity(`Admin assigned zones [${u.allowedZones.join(',')}] and skills [${u.allowedSkills.join(',')}] to ${u.username}`);
+  showToast(`✅ Assignments saved for ${u.name}`);
 }
 
 function openAddUserModal() {
@@ -4046,11 +4489,11 @@ function saveUser() {
     if (users.find(x => x.username === username)) {
       showToast('⚠️ Username already exists — choose another'); return;
     }
-    const newUser = { id: Date.now(), name, username, password, role };
+    const newUser = { id: Date.now(), name, username, password, role, mustChangePassword: true, allowedZones: [], allowedSkills: [] };
     users.push(newUser);
     persistUsers();
-    logActivity('Created user: ' + username);
-    showToast('✅ User created successfully');
+    logActivity('Created user: ' + username + ' (must change password on first login)');
+    showToast('✅ User created. They must change password on first login.');
   }
 
   closeModal('user-modal');
@@ -4076,6 +4519,63 @@ function logActivity(msg) {
   };
   activityLog.unshift(entry);
   if (activityLog.length > 500) activityLog.pop();
+  // Persist activity log in localStorage
+  try { localStorage.setItem('knsap_activity', JSON.stringify(activityLog.slice(0,200))); } catch(e) {}
+}
+
+// Load persisted activity log
+(function() {
+  try {
+    const saved = localStorage.getItem('knsap_activity');
+    if (saved) activityLog = JSON.parse(saved);
+  } catch(e) {}
+})();
+
+// ── Modal photo preview ──
+let pendingPhotos = {}; // track photos being uploaded in modal
+function previewModalPhoto(input, imgId, photoKey) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { showToast('Photo must be under 2MB'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const imgEl = document.getElementById(imgId);
+    if (imgEl) { imgEl.src = e.target.result; imgEl.style.display = 'block'; }
+    pendingPhotos[photoKey] = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+// ── Render master's linked trainees in edit modal ──
+function renderMasterTraineesInModal(masterName) {
+  const wrap = document.getElementById('cm-master-trainees-wrap');
+  const list = document.getElementById('cm-master-trainees-list');
+  if (!wrap || !list || !masterName) { if (wrap) wrap.style.display = 'none'; return; }
+  const trainees = DB.filter(r => r['NAME OF MASTER'] && r['NAME OF MASTER'].toUpperCase() === masterName.toUpperCase() && r['NAME OF TRAINEE']);
+  if (!trainees.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'block';
+  list.innerHTML = trainees.map((t,i) => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-bottom:1px solid var(--gray-100)">
+      <span style="font-weight:600;color:var(--navy-dark)">${i+1}. ${t['NAME OF TRAINEE']}</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="badge badge-gray" style="font-size:10px">${t.SKILLS||''}</span>
+        <span class="badge ${t['TRAINEE GENDER']==='FEMALE'?'badge-amber':'badge-blue'}" style="font-size:10px">${t['TRAINEE GENDER']?t['TRAINEE GENDER'].charAt(0):''}</span>
+        <span class="badge ${t.COHORT===1?'badge-blue':'badge-amber'}" style="font-size:10px">C${t.COHORT}</span>
+      </div>
+    </div>`).join('');
+}
+
+// ── Live data persistence helper ──
+function persistLiveData() {
+  try {
+    const sheetId = localStorage.getItem('knsap_sheet_id');
+    const apiKey = localStorage.getItem('knsap_api_key');
+    if (!sheetId || !apiKey) return;
+    // Auto-refresh every 5 minutes if connected
+    setTimeout(() => {
+      if (currentUser) autoConnectSheets(sheetId, apiKey);
+    }, 300000);
+  } catch(e) {}
 }
 
 function renderActivityLog() {
@@ -4087,13 +4587,20 @@ function renderActivityLog() {
     return;
   }
   if (!activityLog.length) { el.innerHTML='<div class="empty-state"><h3>No activity yet</h3></div>'; return; }
+  // Group by type for display
+  const isEdit = (msg) => /edited|changed|updated|reason:/i.test(msg);
   el.innerHTML = activityLog.map(a => {
     const roleColor = a.role === 'admin' ? 'var(--orange)' : a.role === 'guest' ? 'var(--gray-500)' : 'var(--navy)';
+    const dotColor = isEdit(a.msg) ? 'var(--amber)' : a.role === 'admin' ? 'var(--orange)' : 'var(--navy)';
+    // Extract reason if present
+    const reasonMatch = a.msg.match(/Reason: (.+)$/i);
+    const reasonHtml = reasonMatch ? `<div style="margin-top:4px;padding:4px 8px;background:var(--amber-pale);border-radius:4px;font-size:11px;color:var(--amber)">📋 ${reasonMatch[1]}</div>` : '';
     return `
     <div class="activity-item">
-      <div class="activity-dot"></div>
+      <div class="activity-dot" style="background:${dotColor}"></div>
       <div style="flex:1">
-        <div class="activity-text">${a.msg}</div>
+        <div class="activity-text">${a.msg.replace(/— Reason: .+$/, '')}</div>
+        ${reasonHtml}
         <div style="display:flex;gap:10px;margin-top:3px;align-items:center">
           <span style="font-size:11px;color:${roleColor};font-weight:600">${a.actor}</span>
           <span style="font-size:10px;color:var(--gray-400)">${a.role}</span>
@@ -4312,10 +4819,37 @@ async function autoConnectSheets(id, key) {
 
     // ── Update in-memory DB — Google Sheet is the source of truth ──
     DB = loaded;
-    DB.forEach(r => { if(SKILL_NORM[r.SKILLS]) r.SKILLS = SKILL_NORM[r.SKILLS]; });
+    DB.forEach(r => {
+      if(SKILL_NORM[r.SKILLS]) r.SKILLS = SKILL_NORM[r.SKILLS];
+      // Normalize gender fields across all records
+      const rawG = (r['GENDER'] || r['TRAINEE GENDER'] || r['Trainee Gender'] || '').toUpperCase().trim();
+      const rawMG = (r['MASTER GENDER'] || r['Master Gender'] || '').toUpperCase().trim();
+      const normalizeG = (g) => {
+        if (!g) return '';
+        if (g === 'M' || g === 'MALE') return 'MALE';
+        if (g === 'F' || g === 'FEMALE') return 'FEMALE';
+        return g;
+      };
+      r['TRAINEE GENDER'] = normalizeG(rawG);
+      r['GENDER'] = normalizeG(rawG);
+      r['MASTER GENDER'] = normalizeG(rawMG);
+    });
+    // Cross-populate: fill MASTER GENDER from masters table records sharing same master name
+    const masterGenderMap = {};
+    DB.forEach(r => {
+      if (r['NAME OF MASTER'] && r['MASTER GENDER']) {
+        masterGenderMap[r['NAME OF MASTER'].toUpperCase()] = r['MASTER GENDER'];
+      }
+    });
+    DB.forEach(r => {
+      if (r['NAME OF MASTER'] && !r['MASTER GENDER']) {
+        r['MASTER GENDER'] = masterGenderMap[r['NAME OF MASTER'].toUpperCase()] || '';
+      }
+    });
     populateSkillFilters();
     updateMasterRecordCount();
     updateTraineeRecordCount();
+    persistLiveData();
 
     // ── Refresh whichever page is currently visible ──
     const activePage = document.querySelector('.page.active');
@@ -4460,7 +4994,9 @@ document.addEventListener('keydown', e => {
 
 // ── Keyboard: Enter to sign in ──
 document.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && document.getElementById('login-page').style.display !== 'none') doLogin();
+  if (e.key === 'Enter' && document.getElementById('login-page').style.display !== 'none') {
+    if (!lockoutTimer) doLogin();
+  }
 });
 </script>
 </body>
