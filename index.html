@@ -4085,7 +4085,8 @@ function renderTrainees() {
         </div>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
   renderPagination('trainees', data.length, currentPageTrainees, (p) => { currentPageTrainees=p; renderTrainees(); });
 }
 
